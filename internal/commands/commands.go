@@ -3,7 +3,6 @@ package commands
 import (
 	"fmt"
 	"oksana-vpn-telegram-bot/pkg/api"
-	"oksana-vpn-telegram-bot/pkg/models"
 	"oksana-vpn-telegram-bot/pkg/utils"
 	"strconv"
 	"strings"
@@ -83,35 +82,46 @@ func RegisterCommands(bot *telebot.Bot) {
 	})
 }
 
-func getConfigsKeyboard(c telebot.Context) *telebot.ReplyMarkup {
-	configs := []models.Config{
-		{ID: 1, Name: "Config 1"},
-		{ID: 2, Name: "Config 2"},
-		{ID: 3, Name: "Config 3"},
-	}
+func getConfigsKeyboard(c telebot.Context) (*telebot.ReplyMarkup, error) {
+	client := api.NewClient(c)
+
+	response, err := client.GetConfigs()
+
 	kb := &telebot.ReplyMarkup{}
-	row := []telebot.Btn{}
-	for _, config := range configs {
-		row = append(row, kb.Data(config.Name, "config|"+strconv.Itoa(config.ID)+"|"+config.Name))
+	inline := []telebot.Row{}
+
+	if err == nil {
+		for _, config := range response.Configs {
+			row := kb.Data(config.Name, "config|"+strconv.Itoa(int(config.ID))+"|"+config.Name)
+
+			inline = append(
+				inline,
+				kb.Row(row),
+			)
+		}
 	}
 
 	btnToStart := kb.Data("К началу", "to_start")
-	kb.Inline(
-		kb.Row(row...),
+
+	inline = append(
+		inline,
 		kb.Row(btnToStart),
 	)
+	kb.Inline(
+		inline...,
+	)
 
-	return kb
+	return kb, err
 }
 
 func HandleConfigsCommand(c telebot.Context) error {
-	kb := getConfigsKeyboard(c)
+	kb, _ := getConfigsKeyboard(c)
 
 	return c.Send("Выбери конфиг:", kb)
 }
 
 func HandleConfigsButton(c telebot.Context) error {
-	kb := getConfigsKeyboard(c)
+	kb, _ := getConfigsKeyboard(c)
 
 	return c.Edit("Выбери конфиг:", kb)
 }

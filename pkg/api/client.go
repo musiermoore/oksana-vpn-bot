@@ -133,3 +133,29 @@ func (c *Client) SendPaymentRequest(amount float32) (PaymentResponse, error) {
 		Message: data.Message,
 	}, nil
 }
+
+type Config struct {
+	ID     int32  `json:"id"`
+	UserID int32  `json:"user_id"`
+	Name   string `json:"name"`
+}
+
+type ConfigResponse struct {
+	Configs []Config `json:"configs"`
+	Message string   `json:"message"`
+	Type    string   `json:"type"`
+}
+
+func (c *Client) GetConfigs() (ConfigResponse, error) {
+	respBytes, err := Request("GET", fmt.Sprintf("users/%s/configs", c.username), nil)
+	if err != nil {
+		return ConfigResponse{}, err
+	}
+
+	var data ConfigResponse
+	if err := json.Unmarshal(respBytes, &data); err != nil {
+		return ConfigResponse{}, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	return data, nil
+}
