@@ -60,7 +60,7 @@ func Request(method string, path string, data any) ([]byte, error) {
 	}
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("api error %d: %s", resp.StatusCode, string(respBody))
+		return respBody, fmt.Errorf("api error %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	return respBody, nil
@@ -89,5 +89,47 @@ func (c *Client) GetBalance() (Balance, error) {
 	return Balance{
 		Amount: data.Balance,
 		Debt:   data.Debt,
+	}, nil
+}
+
+type PaymentResponse struct {
+	Status  bool
+	Message string
+}
+
+func (c *Client) SendPaymentRequest(amount float32) (PaymentResponse, error) {
+	type PaymentBody struct {
+		Amount float32 `json:"amount"`
+		Bank   string  `json:"bank"`
+	}
+
+	respBytes, err := Request("POST", fmt.Sprintf("users/%s/transactions", c.username), PaymentBody{
+		Amount: amount,
+		Bank:   "tbank",
+	})
+
+	var data struct {
+		Message string `json:"message"`
+	}
+
+	if len(respBytes) == 0 {
+		return PaymentResponse{
+			Message: "Что-то пошло не так :(",
+		}, fmt.Errorf("empty response from API: %w", err)
+	}
+
+	if jsonErr := json.Unmarshal(respBytes, &data); jsonErr != nil {
+		return PaymentResponse{
+			Message: "Что-то пошло не так :(",
+		}, fmt.Errorf("failed to parse JSON: %w; raw: %s", jsonErr, string(respBytes))
+	}
+
+	if data.Message == "" {
+		data.Message = "Что-то пошло не так :("
+	}
+
+	return PaymentResponse{
+		Status:  err == nil,
+		Message: data.Message,
 	}, nil
 }

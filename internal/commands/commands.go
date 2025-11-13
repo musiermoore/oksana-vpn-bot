@@ -66,20 +66,20 @@ func RegisterCommands(bot *telebot.Bot) {
 
 			amount, err := strconv.ParseFloat(text, 64)
 			if err != nil {
-				return c.Send("Please enter a valid number.")
+				return c.Send("Нужно ввести число.")
 			}
 
 			kb := &telebot.ReplyMarkup{}
-			btnAdd := kb.Data("Add", fmt.Sprintf("submit_payment_request|%f", amount))
-			btnCancel := kb.Data("Cancel", "to_start")
+			btnAdd := kb.Data("Добавить", fmt.Sprintf("submit_payment_request|%f", amount))
+			btnCancel := kb.Data("Отменить", "to_start")
 			kb.Inline(kb.Row(btnAdd, btnCancel))
 
 			// Handle the amount
-			return c.Send(fmt.Sprintf("✅ You want to add $%.2f?", amount), kb)
+			return c.Send(fmt.Sprintf("✅ Отправить запрос на пополение %.2f руб?", amount), kb)
 		}
 
 		// If not waiting — handle normal text
-		return c.Send("Use /start to show menu")
+		return c.Send("Используй /start")
 	})
 }
 
@@ -244,5 +244,9 @@ func HandleSubmitPaymentRequest(c telebot.Context) error {
 
 	kb.Inline(kb.Row(btnToStart))
 
-	return c.Edit(fmt.Sprintf("Запрос на %.2f отправлен.", amount), kb)
+	client := api.NewClient(c)
+
+	response, _ := client.SendPaymentRequest(float32(amount))
+
+	return c.Edit(response.Message, kb)
 }
