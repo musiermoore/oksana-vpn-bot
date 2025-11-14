@@ -159,3 +159,54 @@ func (c *Client) GetConfigs() (ConfigResponse, error) {
 
 	return data, nil
 }
+
+func (c *Client) GetConfigQrCode(config string) ([]byte, *ConfigResponse, error) {
+	respBytes, err := Request("GET", fmt.Sprintf("users/%s/configs/%s/qr-code", c.username, config), nil)
+	if err != nil {
+		// The API might return a JSON error body even on non-200 codes
+		var errData ConfigResponse
+		if jsonErr := json.Unmarshal([]byte(err.Error()), &errData); jsonErr == nil {
+			return nil, &errData, fmt.Errorf("api error: %w", err)
+		}
+		return nil, nil, err
+	}
+
+	// Try to detect if the response is JSON (error) or file (success)
+	if len(respBytes) > 0 && respBytes[0] == '{' {
+		// Looks like JSON
+		var data ConfigResponse
+		if err := json.Unmarshal(respBytes, &data); err != nil {
+			return nil, nil, fmt.Errorf("failed to parse JSON: %w", err)
+		}
+		return nil, &data, fmt.Errorf("api returned error: %s", data.Message)
+	}
+
+	// Otherwise, assume it's the file bytes
+	return respBytes, nil, nil
+}
+
+func (c *Client) GetConfigFile(config string) ([]byte, *ConfigResponse, error) {
+	// Make the request
+	respBytes, err := Request("GET", fmt.Sprintf("users/%s/configs/%s/download", c.username, config), nil)
+	if err != nil {
+		// The API might return a JSON error body even on non-200 codes
+		var errData ConfigResponse
+		if jsonErr := json.Unmarshal([]byte(err.Error()), &errData); jsonErr == nil {
+			return nil, &errData, fmt.Errorf("api error: %w", err)
+		}
+		return nil, nil, err
+	}
+
+	// Try to detect if the response is JSON (error) or file (success)
+	if len(respBytes) > 0 && respBytes[0] == '{' {
+		// Looks like JSON
+		var data ConfigResponse
+		if err := json.Unmarshal(respBytes, &data); err != nil {
+			return nil, nil, fmt.Errorf("failed to parse JSON: %w", err)
+		}
+		return nil, &data, fmt.Errorf("api returned error: %s", data.Message)
+	}
+
+	// Otherwise, assume it's the file bytes
+	return respBytes, nil, nil
+}
