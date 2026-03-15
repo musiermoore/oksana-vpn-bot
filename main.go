@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"oksana-vpn-telegram-bot/internal/commands"
 	"os"
@@ -21,7 +20,6 @@ func main() {
 		Token:  os.Getenv("BOT_TOKEN"),
 		Poller: &tele.LongPoller{Timeout: 10 * time.Second},
 	}
-	fmt.Println("Token: " + os.Getenv("BOT_TOKEN"))
 
 	bot, err := tele.NewBot(pref)
 	if err != nil {
