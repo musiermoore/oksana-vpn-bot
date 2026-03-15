@@ -19,11 +19,12 @@ var waitingForAmount = make(map[int64]bool)
 func RegisterCommands(bot *telebot.Bot) {
 	menu := &telebot.ReplyMarkup{}
 
-	btnConfigs := menu.Data("Конфиги", "menu_configs")
+	btnWgConfigs := menu.Data("WireGuard", "wireguard_menu_configs")
+	btnVlessConfigs := menu.Data("Vless", "vless_menu_configs")
 	btnBalance := menu.Data("Баланс", "menu_balance")
 	btnHelp := menu.Data("Помощь", "menu_help")
 	menu.Inline(
-		menu.Row(btnConfigs, btnBalance, btnHelp),
+		menu.Row(btnWgConfigs, btnVlessConfigs, btnBalance, btnHelp),
 	)
 
 	bot.Handle("/start", func(c telebot.Context) error {
@@ -31,12 +32,14 @@ func RegisterCommands(bot *telebot.Bot) {
 	})
 
 	bot.Handle("/help", HandleHelpCommand)
-	bot.Handle("/configs", HandleConfigsCommand)
+	bot.Handle("/wg-configs", HandleWireguardConfigsCommand)
+	bot.Handle("/vless-configs", HandleVlessConfigsCommand)
 	bot.Handle("/balance", HandleBalance)
 	bot.Handle("/payment_request", HandleSendPaymentRequest)
 
 	// Handle main menu buttons
-	bot.Handle(&btnConfigs, HandleConfigsButton)
+	bot.Handle(&btnWgConfigs, HandleWireguardConfigsButton)
+	bot.Handle(&btnVlessConfigs, HandleVlessConfigsButton)
 	bot.Handle(&btnHelp, HandleHelpButton)
 	bot.Handle(&btnBalance, HandleBalance)
 
@@ -50,8 +53,10 @@ func RegisterCommands(bot *telebot.Bot) {
 			return HandleChoosingConfig(c)
 		} else if data == "to_start" {
 			return c.Send("Выбери команду:", menu)
-		} else if data == "to_configs" {
-			return HandleConfigsButton(c)
+		} else if data == "to_wireguard_configs" {
+			return HandleWireguardConfigsButton(c)
+		} else if data == "to_vless_configs" {
+			return HandleVlessConfigsButton(c)
 		} else if strings.HasPrefix(data, "send_payment_request") {
 			return HandleSendPaymentRequest(c)
 		} else if strings.HasPrefix(data, "submit_payment_request|") {
@@ -104,23 +109,26 @@ func RegisterCommands(bot *telebot.Bot) {
 	})
 }
 
-func getConfigsKeyboard(c telebot.Context) (*telebot.ReplyMarkup, error) {
+func getConfigsKeyboard(c telebot.Context, configType string) (*telebot.ReplyMarkup, *api.ConfigResponse, error) {
 	client := api.NewClient(c)
 
-	response, err := client.GetConfigs()
+	response, err := client.GetConfigs(configType)
 
 	kb := &telebot.ReplyMarkup{}
 	inline := []telebot.Row{}
 
 	if err == nil {
 		for _, config := range response.Configs {
-			row := kb.Data(config.Name, "config|"+strconv.Itoa(int(config.ID))+"|"+config.Name)
+			row := kb.Data(config.Name, "config|"+configType+"|"+strconv.Itoa(int(config.ID))+"|"+config.Name)
 
 			inline = append(
 				inline,
 				kb.Row(row),
 			)
 		}
+	} else if response.Type == "debt" {
+		btnBalance := kb.Data("Баланс", "menu_balance")
+		inline = append(inline, kb.Row(btnBalance))
 	}
 
 	btnToStart := kb.Data("К началу", "to_start")
@@ -133,19 +141,49 @@ func getConfigsKeyboard(c telebot.Context) (*telebot.ReplyMarkup, error) {
 		inline...,
 	)
 
-	return kb, err
+	return kb, &response, err
 }
 
-func HandleConfigsCommand(c telebot.Context) error {
-	kb, _ := getConfigsKeyboard(c)
+func HandleWireguardConfigsCommand(c telebot.Context) error {
+	kb, response, err := getConfigsKeyboard(c, "wireguard")
 
-	return c.Send("Выбери конфиг:", kb)
+	message := getConfigMessage(response, err, "Выбери конфиг:")
+
+	return c.Send(message, kb)
 }
 
-func HandleConfigsButton(c telebot.Context) error {
-	kb, _ := getConfigsKeyboard(c)
+func HandleWireguardConfigsButton(c telebot.Context) error {
+	kb, response, err := getConfigsKeyboard(c, "wireguard")
 
-	return c.Send("Выбери конфиг:", kb)
+	message := getConfigMessage(response, err, "Выбери конфиг:")
+
+	return c.Send(message, kb)
+}
+
+func HandleVlessConfigsCommand(c telebot.Context) error {
+	kb, response, err := getConfigsKeyboard(c, "vless")
+
+	message := getConfigMessage(response, err, "Выбери конфиг:")
+
+	return c.Send(message, kb)
+}
+
+func HandleVlessConfigsButton(c telebot.Context) error {
+	kb, response, err := getConfigsKeyboard(c, "vless")
+
+	message := getConfigMessage(response, err, "Выбери конфиг:")
+
+	return c.Send(message, kb)
+}
+
+func getConfigMessage(response *api.ConfigResponse, err error, message string) string {
+	if err != nil && response.Message != "" {
+		message = response.Message
+	} else if len(response.Configs) == 0 {
+		message = "Конфиги не найдены"
+	}
+
+	return message
 }
 
 func getHelpData() (*telebot.ReplyMarkup, string) {
@@ -229,18 +267,32 @@ func HandleHelpButton(c telebot.Context) error {
 
 func HandleChoosingConfig(c telebot.Context) error {
 	config := strings.TrimSpace(c.Callback().Data)
+	parts := strings.Split(config, "|")
 
-	configName := strings.Split(config, "|")[2]
+	configType := parts[1]
+	configName := parts[3]
 
 	kb := &telebot.ReplyMarkup{}
 
 	btnQR := kb.Data("QR Code", "action_config_qr|"+config)
-	btnDownload := kb.Data("Файл", "action_config_file|"+config)
-	btnConfigs := kb.Data("Конфиги", "to_configs")
+
+	// Show different buttons based on config type
+	var actionButtons []telebot.Btn
+	if configType == "vless" {
+		btnLink := kb.Data("Получить ссылку", "action_config_link|"+config)
+		actionButtons = []telebot.Btn{btnQR, btnLink}
+	} else {
+		btnDownload := kb.Data("Файл", "action_config_file|"+config)
+		actionButtons = []telebot.Btn{btnQR, btnDownload}
+	}
+
+	btnWireguardConfigs := kb.Data("WireGuard Конфиги", "to_wireguard_configs")
+	btnVlessConfigs := kb.Data("Vless Конфиги", "to_vless_configs")
 
 	kb.Inline(
-		kb.Row(btnQR, btnDownload),
-		kb.Row(btnConfigs),
+		kb.Row(actionButtons...),
+		kb.Row(btnWireguardConfigs),
+		kb.Row(btnVlessConfigs),
 	)
 
 	return c.Send("Выбери действие для конфига "+configName, kb)
@@ -251,16 +303,39 @@ func prepareConfigData(c telebot.Context) string {
 	return strings.Replace(data, "config|", "", 1)
 }
 
-func getConfigName(c telebot.Context) string {
+func getConfigType(c telebot.Context) string {
 	data := prepareConfigData(c)
-
-	return strings.Split(data, "|")[2]
+	parts := strings.Split(data, "|")
+	// After removing "config|", action data looks like: "action_config_qr|wireguard|123|name"
+	// So configType is at index 1
+	if strings.HasPrefix(data, "action_config_") {
+		return parts[1]
+	}
+	// For non-action data: "wireguard|123|name"
+	return parts[0]
 }
 
-func getActionConfigKeyboard() *telebot.ReplyMarkup {
+func getConfigName(c telebot.Context) string {
+	data := prepareConfigData(c)
+	parts := strings.Split(data, "|")
+	// After removing "config|", action data looks like: "action_config_qr|wireguard|123|name"
+	// So configName is at index 3
+	if strings.HasPrefix(data, "action_config_") {
+		return parts[3]
+	}
+	// For non-action data: "wireguard|123|name"
+	return parts[2]
+}
+
+func getActionConfigKeyboard(configType string) *telebot.ReplyMarkup {
 	kb := &telebot.ReplyMarkup{}
 
-	btnPrev := kb.Data("Конфиги", "to_configs")
+	backAction := "to_wireguard_configs"
+	if configType == "vless" {
+		backAction = "to_vless_configs"
+	}
+
+	btnPrev := kb.Data("Конфиги", backAction)
 	btnToStart := kb.Data("К началу", "to_start")
 
 	kb.Inline(kb.Row(btnPrev, btnToStart))
@@ -271,14 +346,16 @@ func getActionConfigKeyboard() *telebot.ReplyMarkup {
 func HandleActionConfig(c telebot.Context) error {
 	data := prepareConfigData(c)
 
+	configType := getConfigType(c)
 	configName := getConfigName(c)
-	kb := getActionConfigKeyboard()
+	kb := getActionConfigKeyboard(configType)
 
-	fmt.Println(data)
 	if strings.HasPrefix(data, "action_config_qr|") {
 		return HandleQrCodeConfig(c)
 	} else if strings.HasPrefix(data, "action_config_file|") {
 		return HandleDownloadConfig(c)
+	} else if strings.HasPrefix(data, "action_config_link|") {
+		return HandleGetLinkConfig(c)
 	} else if strings.HasPrefix(data, "action_config_both|") {
 		return c.Send("QR Code и файл для "+configName, kb)
 	}
@@ -294,12 +371,11 @@ func sanitizeConfigFileName(name string) string {
 func HandleDownloadConfig(c telebot.Context) error {
 	client := api.NewClient(c)
 
+	configType := getConfigType(c)
 	configName := getConfigName(c)
-	kb := getActionConfigKeyboard()
+	kb := getActionConfigKeyboard(configType)
 
-	fmt.Println(configName)
-
-	fileData, apiError, err := client.GetConfigFile(configName)
+	fileData, apiError, err := client.GetConfigFile(configType, configName)
 	if err != nil {
 		if apiError != nil {
 			fmt.Println("API error:", apiError.Message)
@@ -325,12 +401,11 @@ func HandleDownloadConfig(c telebot.Context) error {
 func HandleQrCodeConfig(c telebot.Context) error {
 	client := api.NewClient(c)
 
+	configType := getConfigType(c)
 	configName := getConfigName(c)
-	kb := getActionConfigKeyboard()
+	kb := getActionConfigKeyboard(configType)
 
-	fmt.Println(configName)
-
-	fileData, apiError, err := client.GetConfigQrCode(configName)
+	fileData, apiError, err := client.GetConfigQrCode(configType, configName)
 	if err != nil {
 		if apiError != nil {
 			fmt.Println("API error:", apiError.Message)
@@ -348,6 +423,32 @@ func HandleQrCodeConfig(c telebot.Context) error {
 	}
 
 	return c.Send(photo, kb)
+}
+
+func HandleGetLinkConfig(c telebot.Context) error {
+	client := api.NewClient(c)
+
+	configType := getConfigType(c)
+	configName := getConfigName(c)
+	kb := getActionConfigKeyboard(configType)
+
+	link, apiError, err := client.GetLink(configType, configName)
+	if err != nil {
+		if apiError != nil {
+			fmt.Println("API error:", apiError.Message)
+			return c.Send(apiError.Message, kb)
+		} else {
+			fmt.Println("Request error:", err)
+		}
+		return c.Send("Произошла ошибка при запросе ссылки.")
+	}
+
+	message := fmt.Sprintf("Вот твоя ссылка 😽\n\n`%s`", link)
+
+	return c.Send(message, &telebot.SendOptions{
+		ParseMode:   telebot.ModeMarkdown,
+		ReplyMarkup: kb,
+	})
 }
 
 func HandleBalance(c telebot.Context) error {
