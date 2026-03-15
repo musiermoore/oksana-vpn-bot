@@ -32,8 +32,8 @@ func RegisterCommands(bot *telebot.Bot) {
 	})
 
 	bot.Handle("/help", HandleHelpCommand)
-	bot.Handle("/wg-configs", HandleWireguardConfigsCommand)
-	bot.Handle("/vless-configs", HandleVlessConfigsCommand)
+	bot.Handle("/wg_configs", HandleWireguardConfigsCommand)
+	bot.Handle("/vless_configs", HandleVlessConfigsCommand)
 	bot.Handle("/balance", HandleBalance)
 	bot.Handle("/payment_request", HandleSendPaymentRequest)
 
