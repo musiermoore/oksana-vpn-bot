@@ -11,10 +11,8 @@ import (
 )
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
+	// Load .env file if it exists (optional, for local development)
+	_ = godotenv.Load()
 
 	pref := tele.Settings{
 		Token:  os.Getenv("BOT_TOKEN"),
