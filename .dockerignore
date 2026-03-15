@@ -1,0 +1,35 @@
+# Git
+.git
+.gitignore
+
+# Environment files (will be provided at runtime)
+.env
+
+# Documentation
+README.md
+*.md
+
+# Docker files
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# IDE
+.vscode
+.idea
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+main
+
+# Test files
+*_test.go
+testdata
+
+# Temporary files
+tmp
+*.tmp
+*.log

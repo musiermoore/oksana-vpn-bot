@@ -1,0 +1,31 @@
+services:
+  oksana-vpn-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: oksana-vpn-telegram-bot
+    restart: unless-stopped
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - API_URL=${API_URL}
+      - API_BASIC_AUTH_USER=${API_BASIC_AUTH_USER}
+      - API_BASIC_AUTH_PASSWORD=${API_BASIC_AUTH_PASSWORD}
+    # Use .env file for environment variables
+    env_file:
+      - .env
+    # Add health check (optional but recommended)
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "main"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # Resource limits (optional but recommended for production)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
