@@ -61,6 +61,8 @@ func RegisterCommands(bot *telebot.Bot) {
 			return HandleSendPaymentRequest(c)
 		} else if strings.HasPrefix(data, "submit_payment_request|") {
 			return HandleSubmitPaymentRequest(c)
+		} else if strings.HasPrefix(data, "approve_deposit|") || strings.HasPrefix(data, "deny_deposit|") {
+			return HandleDepositAction(c)
 		} else if data == "cancel_payment_and_return_to_start" {
 			userId := c.Sender().ID
 			waitingForAmount[userId] = false
@@ -520,4 +522,51 @@ func HandleSubmitPaymentRequest(c telebot.Context) error {
 	response, _ := client.SendPaymentRequest(float32(amount))
 
 	return c.Send(response.Message, kb)
+}
+
+func HandleDepositAction(c telebot.Context) error {
+	data := strings.TrimSpace(c.Callback().Data)
+	parts := strings.SplitN(data, "|", 2)
+	if len(parts) != 2 || parts[1] == "" {
+		_ = c.Respond(&telebot.CallbackResponse{})
+		return c.Send("Unknown action.")
+	}
+
+	action := parts[0]
+	transactionID := parts[1]
+
+	client := api.NewClient(c)
+
+	if err := c.Respond(&telebot.CallbackResponse{}); err != nil {
+		return err
+	}
+
+	username := c.Sender().Username
+	if username == "" {
+		username = c.Sender().FirstName
+	}
+
+	var err error
+	var responseText string
+
+	switch action {
+	case "approve_deposit":
+		err = client.ApprovePaymentRequest(transactionID)
+		if err == nil {
+			responseText = fmt.Sprintf("Запрос @%s принят ✅", username)
+		} else {
+			responseText = "Ошибка =("
+		}
+	case "deny_deposit":
+		err = client.DeclinePaymentRequest(transactionID)
+		if err == nil {
+			responseText = fmt.Sprintf("Запрос @%s отклонён ❌", username)
+		} else {
+			responseText = "Ошибка =("
+		}
+	default:
+		responseText = "Unknown action."
+	}
+
+	return c.Send(responseText)
 }

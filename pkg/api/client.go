@@ -134,6 +134,16 @@ func (c *Client) SendPaymentRequest(amount float32) (PaymentResponse, error) {
 	}, nil
 }
 
+func (c *Client) ApprovePaymentRequest(transactionID string) error {
+	_, err := Request("POST", fmt.Sprintf("transactions/%s/approve", transactionID), nil)
+	return err
+}
+
+func (c *Client) DeclinePaymentRequest(transactionID string) error {
+	_, err := Request("DELETE", fmt.Sprintf("transactions/%s/decline", transactionID), nil)
+	return err
+}
+
 type Config struct {
 	ID     int32  `json:"id"`
 	UserID int32  `json:"user_id"`
