@@ -212,6 +212,8 @@ func getHelpData() (*telebot.ReplyMarkup, string) {
 Качать отсюда: https://www.wireguard.com/install/
 
 Там на все устройства есть ссылки
+
+Для тех, у кого не работает, версия с усиленной маскировкой - AmneziaWG в Play Market или по ссылке https://docs.amnezia.org/ru/documentation/amnezia-wg/ (внизу страницы)
 `, "\\'", "`")
 
 	help = utils.EscapeMarkdownV2(help)
