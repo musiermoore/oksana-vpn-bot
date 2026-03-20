@@ -19,6 +19,7 @@ vendor/
 
 # Go build cache
 .cache/
+.gocache
 
 # Environment variables
 .env
