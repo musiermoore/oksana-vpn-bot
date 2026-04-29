@@ -258,3 +258,21 @@ func (c *Client) GetLink(configType, config string) (string, *ConfigResponse, er
 	// Otherwise, assume it's the file bytes
 	return link, nil, nil
 }
+
+func (c *Client) GetVlessLink() (string, *ConfigResponse, error) {
+	// Make the request
+	respBytes, err := Request("GET", fmt.Sprintf("users/%s/vless-link", c.username), nil)
+	if err != nil {
+		// The API might return a JSON error body even on non-200 codes
+		var errData ConfigResponse
+		if jsonErr := json.Unmarshal([]byte(err.Error()), &errData); jsonErr == nil {
+			return "", &errData, fmt.Errorf("api error: %w", err)
+		}
+		return "", nil, err
+	}
+
+	link := string(respBytes)
+
+	// Otherwise, assume it's the file bytes
+	return link, nil, nil
+}

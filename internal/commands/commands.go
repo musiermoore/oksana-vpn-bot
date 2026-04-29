@@ -36,6 +36,7 @@ func RegisterCommands(bot *telebot.Bot) {
 	bot.Handle("/vless_configs", HandleVlessConfigsCommand)
 	bot.Handle("/balance", HandleBalance)
 	bot.Handle("/payment_request", HandleSendPaymentRequest)
+	bot.Handle("/vless_link", HandleVlessLink)
 
 	// Handle main menu buttons
 	bot.Handle(&btnWgConfigs, HandleWireguardConfigsButton)
@@ -569,4 +570,30 @@ func HandleDepositAction(c telebot.Context) error {
 	}
 
 	return c.Send(responseText)
+}
+
+func HandleVlessLink(c telebot.Context) error {
+	kb := &telebot.ReplyMarkup{}
+
+	btnToStart := kb.Data("К началу", "to_start")
+
+	kb.Inline(kb.Row(btnToStart))
+
+	client := api.NewClient(c)
+	link, apiError, err := client.GetVlessLink()
+
+	if err != nil {
+		if apiError != nil {
+			fmt.Println("API error:", apiError.Message)
+		} else {
+			fmt.Println("Request error:", err)
+		}
+		return c.Send("Произошла ошибка при запросе Вашей ссылки.")
+	}
+
+	linkMessage := fmt.Sprintf("Вот твоя ссылка 😽\n\n`%s`", link)
+
+	return c.Send(linkMessage, &telebot.SendOptions{
+		ParseMode: telebot.ModeMarkdown,
+	})
 }
