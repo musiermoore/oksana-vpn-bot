@@ -320,6 +320,18 @@ func getConfigType(c telebot.Context) string {
 	return parts[0]
 }
 
+func getConfigID(c telebot.Context) string {
+	data := prepareConfigData(c)
+	parts := strings.Split(data, "|")
+	// After removing "config|", action data looks like: "action_config_qr|wireguard|123|name"
+	// So configID is at index 2
+	if strings.HasPrefix(data, "action_config_") {
+		return parts[2]
+	}
+	// For non-action data: "wireguard|123|name"
+	return parts[1]
+}
+
 func getConfigName(c telebot.Context) string {
 	data := prepareConfigData(c)
 	parts := strings.Split(data, "|")
@@ -377,10 +389,11 @@ func HandleDownloadConfig(c telebot.Context) error {
 	client := api.NewClient(c)
 
 	configType := getConfigType(c)
+	configID := getConfigID(c)
 	configName := getConfigName(c)
 	kb := getActionConfigKeyboard(configType)
 
-	fileData, apiError, err := client.GetConfigFile(configType, configName)
+	fileData, apiError, err := client.GetConfigFile(configType, configID)
 	if err != nil {
 		if apiError != nil {
 			fmt.Println("API error:", apiError.Message)
@@ -407,10 +420,10 @@ func HandleQrCodeConfig(c telebot.Context) error {
 	client := api.NewClient(c)
 
 	configType := getConfigType(c)
-	configName := getConfigName(c)
+	configID := getConfigID(c)
 	kb := getActionConfigKeyboard(configType)
 
-	fileData, apiError, err := client.GetConfigQrCode(configType, configName)
+	fileData, apiError, err := client.GetConfigQrCode(configType, configID)
 	if err != nil {
 		if apiError != nil {
 			fmt.Println("API error:", apiError.Message)

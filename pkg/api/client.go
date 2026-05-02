@@ -211,10 +211,10 @@ func (c *Client) GetConfigs(configType string) (ConfigResponse, error) {
 	return data, nil
 }
 
-func (c *Client) GetConfigQrCode(configType, config string) ([]byte, *ConfigResponse, error) {
+func (c *Client) GetConfigQrCode(configType, configID string) ([]byte, *ConfigResponse, error) {
 	resp, err := request(
 		"GET",
-		fmt.Sprintf("users/%s/configs/%s/%s/qr-code", c.username, configType, config),
+		fmt.Sprintf("users/%s/configs/%s/%s/qr-code", c.username, configType, configID),
 		nil,
 		"image/png, application/json",
 	)
@@ -242,9 +242,9 @@ func (c *Client) GetConfigQrCode(configType, config string) ([]byte, *ConfigResp
 	return resp.Body, nil, nil
 }
 
-func (c *Client) GetConfigFile(configType, config string) ([]byte, *ConfigResponse, error) {
+func (c *Client) GetConfigFile(configType, configID string) ([]byte, *ConfigResponse, error) {
 	// Make the request
-	respBytes, err := Request("GET", fmt.Sprintf("users/%s/configs/%s/%s/download", c.username, configType, config), nil)
+	respBytes, err := Request("GET", fmt.Sprintf("users/%s/configs/%s/%s/download", c.username, configType, configID), nil)
 	if err != nil {
 		// The API might return a JSON error body even on non-200 codes
 		var errData ConfigResponse
