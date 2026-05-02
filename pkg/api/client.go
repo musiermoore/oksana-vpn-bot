@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 
@@ -219,7 +220,12 @@ func (c *Client) GetConfigQrCode(configType, configID string) ([]byte, *ConfigRe
 		"image/png, application/json",
 	)
 
-	if resp.StatusCode >= 400 || resp.ContentType == "application/json" {
+	contentType, _, parseErr := mime.ParseMediaType(resp.ContentType)
+	if parseErr != nil {
+		contentType = resp.ContentType
+	}
+
+	if resp.StatusCode >= 400 || contentType == "application/json" {
 		var data ConfigResponse
 		if jsonErr := json.Unmarshal(resp.Body, &data); jsonErr != nil {
 			if resp.StatusCode >= 400 {
