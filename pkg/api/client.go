@@ -16,6 +16,12 @@ type Client struct {
 	username string
 }
 
+type apiResponse struct {
+	Body        []byte
+	ContentType string
+	StatusCode  int
+}
+
 func NewClient(context telebot.Context) *Client {
 	return &Client{
 		userId:   context.Sender().ID,
@@ -24,6 +30,15 @@ func NewClient(context telebot.Context) *Client {
 }
 
 func Request(method string, path string, data any) ([]byte, error) {
+	resp, err := request(method, path, data, "application/json")
+	if err != nil {
+		return resp.Body, err
+	}
+
+	return resp.Body, nil
+}
+
+func request(method string, path string, data any, accept string) (apiResponse, error) {
 	baseUrl := os.Getenv("API_URL")
 	username := os.Getenv("API_BASIC_AUTH_USER")
 	password := os.Getenv("API_BASIC_AUTH_PASSWORD")
@@ -32,7 +47,7 @@ func Request(method string, path string, data any) ([]byte, error) {
 	if data != nil {
 		jsonBytes, err := json.Marshal(data)
 		if err != nil {
-			return nil, fmt.Errorf("failed to encode body: %w", err)
+			return apiResponse{}, fmt.Errorf("failed to encode body: %w", err)
 		}
 		body = bytes.NewBuffer(jsonBytes)
 	}
@@ -40,30 +55,36 @@ func Request(method string, path string, data any) ([]byte, error) {
 	req, err := http.NewRequest(method, baseUrl+path, body)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return apiResponse{}, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.SetBasicAuth(username, password)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept", accept)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("request error: %w", err)
+		return apiResponse{}, fmt.Errorf("request error: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+		return apiResponse{}, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	result := apiResponse{
+		Body:        respBody,
+		ContentType: resp.Header.Get("Content-Type"),
+		StatusCode:  resp.StatusCode,
 	}
 
 	if resp.StatusCode >= 400 {
-		return respBody, fmt.Errorf("api error %d: %s", resp.StatusCode, string(respBody))
+		return result, fmt.Errorf("api error %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	return respBody, nil
+	return result, nil
 }
 
 type Balance struct {
@@ -191,28 +212,34 @@ func (c *Client) GetConfigs(configType string) (ConfigResponse, error) {
 }
 
 func (c *Client) GetConfigQrCode(configType, config string) ([]byte, *ConfigResponse, error) {
-	respBytes, err := Request("GET", fmt.Sprintf("users/%s/configs/%s/%s/qr-code", c.username, configType, config), nil)
-	if err != nil {
-		// The API might return a JSON error body even on non-200 codes
-		var errData ConfigResponse
-		if jsonErr := json.Unmarshal([]byte(err.Error()), &errData); jsonErr == nil {
-			return nil, &errData, fmt.Errorf("api error: %w", err)
-		}
-		return nil, nil, err
-	}
+	resp, err := request(
+		"GET",
+		fmt.Sprintf("users/%s/configs/%s/%s/qr-code", c.username, configType, config),
+		nil,
+		"image/png, application/json",
+	)
 
-	// Try to detect if the response is JSON (error) or file (success)
-	if len(respBytes) > 0 && respBytes[0] == '{' {
-		// Looks like JSON
+	if resp.StatusCode >= 400 || resp.ContentType == "application/json" {
 		var data ConfigResponse
-		if err := json.Unmarshal(respBytes, &data); err != nil {
-			return nil, nil, fmt.Errorf("failed to parse JSON: %w", err)
+		if jsonErr := json.Unmarshal(resp.Body, &data); jsonErr != nil {
+			if resp.StatusCode >= 400 {
+				return nil, nil, fmt.Errorf("api error %d: %s", resp.StatusCode, string(resp.Body))
+			}
+			return nil, nil, fmt.Errorf("failed to parse JSON: %w", jsonErr)
 		}
+
+		if data.Message == "" {
+			data.Message = fmt.Sprintf("api error %d", resp.StatusCode)
+		}
+
 		return nil, &data, fmt.Errorf("api returned error: %s", data.Message)
 	}
 
-	// Otherwise, assume it's the file bytes
-	return respBytes, nil, nil
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return resp.Body, nil, nil
 }
 
 func (c *Client) GetConfigFile(configType, config string) ([]byte, *ConfigResponse, error) {
