@@ -447,10 +447,10 @@ func HandleGetLinkConfig(c telebot.Context) error {
 	client := api.NewClient(c)
 
 	configType := getConfigType(c)
-	configName := getConfigName(c)
+	configID := getConfigID(c)
 	kb := getActionConfigKeyboard(configType)
 
-	link, apiError, err := client.GetLink(configType, configName)
+	link, apiError, err := client.GetLink(configType, configID)
 	if err != nil {
 		if apiError != nil {
 			fmt.Println("API error:", apiError.Message)
