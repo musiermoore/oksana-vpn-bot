@@ -13,6 +13,8 @@ services:
     # Use .env file for environment variables
     env_file:
       - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # Add health check (optional but recommended)
     healthcheck:
       test: ["CMD", "pgrep", "-f", "main"]
