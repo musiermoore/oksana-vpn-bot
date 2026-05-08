@@ -10,10 +10,13 @@
 Create a `.env` file based on `.env.example`:
 ```bash
 BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_PROXY=socks5h://host.docker.internal:1080
 API_URL=https://your-api-url.com
 API_BASIC_AUTH_USER=your_username
 API_BASIC_AUTH_PASSWORD=your_password
 ```
+
+`TELEGRAM_PROXY` is optional and affects only Telegram Bot API traffic. The bot uses `host.docker.internal` because it runs inside Docker. If your Docker host does not expose that hostname automatically, add the appropriate host mapping so the container can reach the Xray SOCKS5 listener on port `1080`.
 
 ### Build and Run
 

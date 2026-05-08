@@ -68,6 +68,7 @@ Create a `.env` file:
 
 ```env
 BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_PROXY=socks5h://host.docker.internal:1080
 
 # API Url
 API_URL=http://localhost/api
@@ -76,6 +77,8 @@ API_URL=http://localhost/api
 API_BASIC_AUTH_USER=
 API_BASIC_AUTH_PASSWORD=
 ```
+
+`TELEGRAM_PROXY` is optional. When set, only Telegram Bot API requests use the SOCKS5 proxy. All other outbound HTTP traffic keeps the normal direct route.
 
 ### 3. Run locally
 
