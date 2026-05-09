@@ -34,9 +34,9 @@ func RegisterCommands(bot *telebot.Bot) {
 	bot.Handle("/help", HandleHelpCommand)
 	bot.Handle("/wg_configs", HandleWireguardConfigsCommand)
 	bot.Handle("/vless_configs", HandleVlessConfigsCommand)
+	bot.Handle("/vless", HandleVlessCommand)
 	bot.Handle("/balance", HandleBalance)
 	bot.Handle("/payment_request", HandleSendPaymentRequest)
-	bot.Handle("/vless_link", HandleVlessLink)
 
 	// Handle main menu buttons
 	bot.Handle(&btnWgConfigs, HandleWireguardConfigsButton)
@@ -58,6 +58,12 @@ func RegisterCommands(bot *telebot.Bot) {
 			return HandleWireguardConfigsButton(c)
 		} else if data == "to_vless_configs" {
 			return HandleVlessConfigsButton(c)
+		} else if data == "vless|menu" {
+			return HandleVlessCommand(c)
+		} else if data == "vless|link" {
+			return HandleVlessLinkAction(c)
+		} else if data == "vless|qr" {
+			return HandleVlessQrAction(c)
 		} else if strings.HasPrefix(data, "send_payment_request") {
 			return HandleSendPaymentRequest(c)
 		} else if strings.HasPrefix(data, "submit_payment_request|") {
@@ -245,6 +251,51 @@ func HandleHelpCommand(c telebot.Context) error {
 		ParseMode:   telebot.ModeMarkdownV2,
 		ReplyMarkup: kb,
 	})
+}
+
+func getVlessKeyboard() *telebot.ReplyMarkup {
+	kb := &telebot.ReplyMarkup{}
+
+	btnLink := kb.Data("Link", "vless|link")
+	btnQR := kb.Data("QR-Code", "vless|qr")
+	btnToStart := kb.Data("К началу", "to_start")
+
+	kb.Inline(
+		kb.Row(btnLink, btnQR),
+		kb.Row(btnToStart),
+	)
+
+	return kb
+}
+
+func getVlessResultKeyboard() *telebot.ReplyMarkup {
+	kb := &telebot.ReplyMarkup{}
+
+	btnBack := kb.Data("Назад", "vless|menu")
+	btnToStart := kb.Data("К началу", "to_start")
+
+	kb.Inline(kb.Row(btnBack, btnToStart))
+
+	return kb
+}
+
+func getVlessErrorMessage(apiErr *api.APIError, fallback string) string {
+	if apiErr == nil {
+		return fallback
+	}
+
+	switch apiErr.StatusCode {
+	case 403, 404:
+		if apiErr.Message != "" {
+			return apiErr.Message
+		}
+	}
+
+	return fallback
+}
+
+func HandleVlessCommand(c telebot.Context) error {
+	return c.Send("Выбери действие для VLESS:", getVlessKeyboard())
 }
 
 func HandleHelpButton(c telebot.Context) error {
@@ -585,28 +636,46 @@ func HandleDepositAction(c telebot.Context) error {
 	return c.Send(responseText)
 }
 
-func HandleVlessLink(c telebot.Context) error {
-	kb := &telebot.ReplyMarkup{}
-
-	btnToStart := kb.Data("К началу", "to_start")
-
-	kb.Inline(kb.Row(btnToStart))
-
+func HandleVlessLinkAction(c telebot.Context) error {
 	client := api.NewClient(c)
-	link, apiError, err := client.GetVlessLink()
+	kb := getVlessResultKeyboard()
+	link, apiErr, err := client.GetVlessSubscriptionLink()
 
 	if err != nil {
-		if apiError != nil {
-			fmt.Println("API error:", apiError.Message)
+		if apiErr != nil {
+			fmt.Println("API error:", apiErr.Message)
+			return c.Send(getVlessErrorMessage(apiErr, "Не получилось получить VLESS ссылку. Попробуй чуть позже."), kb)
 		} else {
 			fmt.Println("Request error:", err)
 		}
-		return c.Send("Произошла ошибка при запросе Вашей ссылки.")
+		return c.Send("Не получилось получить VLESS ссылку. Попробуй чуть позже.", kb)
 	}
 
-	linkMessage := fmt.Sprintf("Вот твоя ссылка 😽\n\n`%s`", link)
+	return c.Send(link, kb)
+}
 
-	return c.Send(linkMessage, &telebot.SendOptions{
-		ParseMode: telebot.ModeMarkdown,
-	})
+func HandleVlessQrAction(c telebot.Context) error {
+	client := api.NewClient(c)
+	kb := getVlessResultKeyboard()
+	fileData, apiErr, err := client.GetVlessSubscriptionQRCode()
+
+	if err != nil {
+		if apiErr != nil {
+			fmt.Println("API error:", apiErr.Message)
+			return c.Send(getVlessErrorMessage(apiErr, "Не получилось получить VLESS QR-Code. Попробуй чуть позже."), kb)
+		}
+
+		fmt.Println("Request error:", err)
+		return c.Send("Не получилось получить VLESS QR-Code. Попробуй чуть позже.", kb)
+	}
+
+	doc := &telebot.Document{
+		File: telebot.File{
+			FileReader: bytes.NewReader(fileData),
+		},
+		FileName: "vless-qr-code.png",
+		Caption:  "Вот твой VLESS QR-Code 😽",
+	}
+
+	return c.Send(doc, kb)
 }

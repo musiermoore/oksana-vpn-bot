@@ -17,6 +17,12 @@ type Client struct {
 	username string
 }
 
+type APIError struct {
+	StatusCode int
+	Message    string
+	Type       string
+}
+
 type apiResponse struct {
 	Body        []byte
 	ContentType string
@@ -178,6 +184,36 @@ type ConfigResponse struct {
 	Type    string   `json:"type"`
 }
 
+func parseConfigAPIError(resp apiResponse, reqErr error) (*ConfigResponse, *APIError, error) {
+	var data ConfigResponse
+	if len(resp.Body) > 0 {
+		if err := json.Unmarshal(resp.Body, &data); err != nil {
+			if reqErr != nil {
+				return nil, &APIError{
+					StatusCode: resp.StatusCode,
+					Message:    string(resp.Body),
+				}, reqErr
+			}
+			return nil, nil, fmt.Errorf("failed to parse JSON: %w", err)
+		}
+	}
+
+	apiErr := &APIError{
+		StatusCode: resp.StatusCode,
+		Message:    data.Message,
+		Type:       data.Type,
+	}
+	if apiErr.Message == "" {
+		apiErr.Message = string(resp.Body)
+	}
+
+	if reqErr == nil {
+		reqErr = fmt.Errorf("api error %d: %s", resp.StatusCode, apiErr.Message)
+	}
+
+	return &data, apiErr, reqErr
+}
+
 func (c *Client) GetWireGuardConfigs() (ConfigResponse, error) {
 	return c.GetConfigs("wireguard")
 }
@@ -226,19 +262,8 @@ func (c *Client) GetConfigQrCode(configType, configID string) ([]byte, *ConfigRe
 	}
 
 	if resp.StatusCode >= 400 || contentType == "application/json" {
-		var data ConfigResponse
-		if jsonErr := json.Unmarshal(resp.Body, &data); jsonErr != nil {
-			if resp.StatusCode >= 400 {
-				return nil, nil, fmt.Errorf("api error %d: %s", resp.StatusCode, string(resp.Body))
-			}
-			return nil, nil, fmt.Errorf("failed to parse JSON: %w", jsonErr)
-		}
-
-		if data.Message == "" {
-			data.Message = fmt.Sprintf("api error %d", resp.StatusCode)
-		}
-
-		return nil, &data, fmt.Errorf("api returned error: %s", data.Message)
+		data, _, parseErr := parseConfigAPIError(resp, err)
+		return nil, data, parseErr
 	}
 
 	if err != nil {
@@ -249,63 +274,93 @@ func (c *Client) GetConfigQrCode(configType, configID string) ([]byte, *ConfigRe
 }
 
 func (c *Client) GetConfigFile(configType, configID string) ([]byte, *ConfigResponse, error) {
-	// Make the request
-	respBytes, err := Request("GET", fmt.Sprintf("users/%s/configs/%s/%s/download", c.username, configType, configID), nil)
+	resp, err := request(
+		"GET",
+		fmt.Sprintf("users/%s/configs/%s/%s/download", c.username, configType, configID),
+		nil,
+		"text/plain, application/json",
+	)
 	if err != nil {
-		// The API might return a JSON error body even on non-200 codes
-		var errData ConfigResponse
-		if jsonErr := json.Unmarshal([]byte(err.Error()), &errData); jsonErr == nil {
-			return nil, &errData, fmt.Errorf("api error: %w", err)
+		data, _, parseErr := parseConfigAPIError(resp, err)
+		if data != nil {
+			return nil, data, parseErr
 		}
 		return nil, nil, err
 	}
 
 	// Try to detect if the response is JSON (error) or file (success)
-	if len(respBytes) > 0 && respBytes[0] == '{' {
+	if len(resp.Body) > 0 && resp.Body[0] == '{' {
 		// Looks like JSON
 		var data ConfigResponse
-		if err := json.Unmarshal(respBytes, &data); err != nil {
+		if err := json.Unmarshal(resp.Body, &data); err != nil {
 			return nil, nil, fmt.Errorf("failed to parse JSON: %w", err)
 		}
 		return nil, &data, fmt.Errorf("api returned error: %s", data.Message)
 	}
 
 	// Otherwise, assume it's the file bytes
-	return respBytes, nil, nil
+	return resp.Body, nil, nil
 }
 
 func (c *Client) GetLink(configType, config string) (string, *ConfigResponse, error) {
-	// Make the request
-	respBytes, err := Request("GET", fmt.Sprintf("users/%s/configs/%s/%s/download", c.username, configType, config), nil)
+	resp, err := request(
+		"GET",
+		fmt.Sprintf("users/%s/configs/%s/%s/download", c.username, configType, config),
+		nil,
+		"text/plain, application/json",
+	)
 	if err != nil {
-		// The API might return a JSON error body even on non-200 codes
-		var errData ConfigResponse
-		if jsonErr := json.Unmarshal([]byte(err.Error()), &errData); jsonErr == nil {
-			return "", &errData, fmt.Errorf("api error: %w", err)
+		data, _, parseErr := parseConfigAPIError(resp, err)
+		if data != nil {
+			return "", data, parseErr
 		}
 		return "", nil, err
 	}
 
-	link := string(respBytes)
+	link := string(resp.Body)
 
-	// Otherwise, assume it's the file bytes
 	return link, nil, nil
 }
 
-func (c *Client) GetVlessLink() (string, *ConfigResponse, error) {
-	// Make the request
-	respBytes, err := Request("GET", fmt.Sprintf("users/%s/vless-link", c.username), nil)
+func (c *Client) GetVlessSubscriptionLink() (string, *APIError, error) {
+	resp, err := request(
+		"GET",
+		fmt.Sprintf("users/%s/vless/link", c.username),
+		nil,
+		"text/plain, application/json",
+	)
 	if err != nil {
-		// The API might return a JSON error body even on non-200 codes
-		var errData ConfigResponse
-		if jsonErr := json.Unmarshal([]byte(err.Error()), &errData); jsonErr == nil {
-			return "", &errData, fmt.Errorf("api error: %w", err)
+		_, apiErr, parseErr := parseConfigAPIError(resp, err)
+		if apiErr != nil {
+			return "", apiErr, parseErr
 		}
 		return "", nil, err
 	}
 
-	link := string(respBytes)
+	return string(resp.Body), nil, nil
+}
 
-	// Otherwise, assume it's the file bytes
-	return link, nil, nil
+func (c *Client) GetVlessSubscriptionQRCode() ([]byte, *APIError, error) {
+	resp, err := request(
+		"GET",
+		fmt.Sprintf("users/%s/vless/qr-code", c.username),
+		nil,
+		"image/png, application/json",
+	)
+
+	contentType, _, parseErr := mime.ParseMediaType(resp.ContentType)
+	if parseErr != nil {
+		contentType = resp.ContentType
+	}
+
+	if resp.StatusCode >= 400 || contentType == "application/json" {
+		_, apiErr, parseErr := parseConfigAPIError(resp, err)
+		return nil, apiErr, parseErr
+	}
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return resp.Body, nil, nil
 }
