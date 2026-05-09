@@ -651,7 +651,12 @@ func HandleVlessLinkAction(c telebot.Context) error {
 		return c.Send("Не получилось получить VLESS ссылку. Попробуй чуть позже.", kb)
 	}
 
-	return c.Send(link, kb)
+	linkMessage := fmt.Sprintf("Вот твоя ссылка 😽\n\n`%s`", link)
+
+	return c.Send(linkMessage, &telebot.SendOptions{
+		ParseMode:   telebot.ModeMarkdown,
+		ReplyMarkup: kb,
+	})
 }
 
 func HandleVlessQrAction(c telebot.Context) error {
@@ -669,13 +674,12 @@ func HandleVlessQrAction(c telebot.Context) error {
 		return c.Send("Не получилось получить VLESS QR-Code. Попробуй чуть позже.", kb)
 	}
 
-	doc := &telebot.Document{
+	photo := &telebot.Photo{
 		File: telebot.File{
 			FileReader: bytes.NewReader(fileData),
 		},
-		FileName: "vless-qr-code.png",
-		Caption:  "Вот твой VLESS QR-Code 😽",
+		Caption: "Вот твой QR Code 😽",
 	}
 
-	return c.Send(doc, kb)
+	return c.Send(photo, kb)
 }
