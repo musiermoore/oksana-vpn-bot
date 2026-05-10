@@ -8,13 +8,15 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"strings"
 
 	"gopkg.in/telebot.v4"
 )
 
 type Client struct {
-	userId   int64
+	userID   int64
 	username string
+	name     string
 }
 
 type APIError struct {
@@ -30,9 +32,18 @@ type apiResponse struct {
 }
 
 func NewClient(context telebot.Context) *Client {
+	name := context.Sender().FirstName
+	if name == "" {
+		name = context.Sender().Username
+	}
+	if name == "" && context.Chat() != nil {
+		name = context.Chat().Title
+	}
+
 	return &Client{
-		userId:   context.Sender().ID,
+		userID:   context.Sender().ID,
 		username: context.Sender().Username,
+		name:     name,
 	}
 }
 
@@ -43,6 +54,62 @@ func Request(method string, path string, data any) ([]byte, error) {
 	}
 
 	return resp.Body, nil
+}
+
+type RegisterUserRequest struct {
+	Telegram   string `json:"telegram"`
+	TelegramID string `json:"telegram_id"`
+	Name       string `json:"name"`
+}
+
+func MissingUserMessage() string {
+	return "Я не нашла тебя в базе. Используй /register и попробуй ещё раз."
+}
+
+func IsMissingUserError(statusCode int, message string) bool {
+	if statusCode != http.StatusNotFound {
+		return false
+	}
+
+	normalized := strings.ToLower(strings.TrimSpace(message))
+	if normalized == "" {
+		return true
+	}
+
+	directMarkers := []string{
+		"user not found",
+		"not found in db",
+		"пользователь не найден",
+	}
+
+	for _, marker := range directMarkers {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+
+	notFoundMarkers := []string{"not found", "не найден"}
+	userMarkers := []string{"user", "telegram", "username", "пользоват", "телеграм"}
+
+	hasNotFoundMarker := false
+	for _, marker := range notFoundMarkers {
+		if strings.Contains(normalized, marker) {
+			hasNotFoundMarker = true
+			break
+		}
+	}
+
+	if !hasNotFoundMarker {
+		return false
+	}
+
+	for _, marker := range userMarkers {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func request(method string, path string, data any, accept string) (apiResponse, error) {
@@ -118,6 +185,16 @@ func (c *Client) GetBalance() (Balance, error) {
 		Amount: data.Balance,
 		Debt:   data.Debt,
 	}, nil
+}
+
+func (c *Client) RegisterUser() error {
+	_, err := Request("POST", "users/register", RegisterUserRequest{
+		Telegram:   c.username,
+		TelegramID: fmt.Sprintf("%d", c.userID),
+		Name:       c.name,
+	})
+
+	return err
 }
 
 type PaymentResponse struct {

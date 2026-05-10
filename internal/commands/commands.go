@@ -16,6 +16,18 @@ import (
 
 var waitingForAmount = make(map[int64]bool)
 
+func missingUserMessage() string {
+	return api.MissingUserMessage()
+}
+
+func isMissingUserConfigResponse(response *api.ConfigResponse, err error) bool {
+	if err == nil || response == nil {
+		return false
+	}
+
+	return api.IsMissingUserError(404, response.Message)
+}
+
 func RegisterCommands(bot *telebot.Bot) {
 	menu := &telebot.ReplyMarkup{}
 
@@ -32,6 +44,7 @@ func RegisterCommands(bot *telebot.Bot) {
 	})
 
 	bot.Handle("/help", HandleHelpCommand)
+	bot.Handle("/register", HandleRegisterCommand)
 	bot.Handle("/wg_configs", HandleWireguardConfigsCommand)
 	bot.Handle("/vless_configs", HandleVlessConfigsCommand)
 	bot.Handle("/vless", HandleVlessCommand)
@@ -186,13 +199,29 @@ func HandleVlessConfigsButton(c telebot.Context) error {
 }
 
 func getConfigMessage(response *api.ConfigResponse, err error, message string) string {
-	if err != nil && response.Message != "" {
+	if isMissingUserConfigResponse(response, err) {
+		message = missingUserMessage()
+	} else if err != nil && response.Message != "" {
 		message = response.Message
 	} else if len(response.Configs) == 0 {
 		message = "Конфиги не найдены"
 	}
 
 	return message
+}
+
+func HandleRegisterCommand(c telebot.Context) error {
+	client := api.NewClient(c)
+
+	if strings.TrimSpace(c.Sender().Username) == "" {
+		return c.Send("У тебя не указан Telegram username. Поставь username в настройках Telegram и попробуй /register ещё раз.")
+	}
+
+	if err := client.RegisterUser(); err != nil {
+		return c.Send("Не получилось завершить регистрацию. Попробуй чуть позже.")
+	}
+
+	return c.Send("Регистрация завершена. Теперь можно пользоваться ботом.")
 }
 
 func getHelpData() (*telebot.ReplyMarkup, string) {
@@ -282,6 +311,10 @@ func getVlessResultKeyboard() *telebot.ReplyMarkup {
 func getVlessErrorMessage(apiErr *api.APIError, fallback string) string {
 	if apiErr == nil {
 		return fallback
+	}
+
+	if api.IsMissingUserError(apiErr.StatusCode, apiErr.Message) {
+		return missingUserMessage()
 	}
 
 	switch apiErr.StatusCode {
@@ -448,6 +481,9 @@ func HandleDownloadConfig(c telebot.Context) error {
 	if err != nil {
 		if apiError != nil {
 			fmt.Println("API error:", apiError.Message)
+			if isMissingUserConfigResponse(apiError, err) {
+				return c.Send(missingUserMessage(), kb)
+			}
 		} else {
 			fmt.Println("Request error:", err)
 		}
@@ -478,6 +514,9 @@ func HandleQrCodeConfig(c telebot.Context) error {
 	if err != nil {
 		if apiError != nil {
 			fmt.Println("API error:", apiError.Message)
+			if isMissingUserConfigResponse(apiError, err) {
+				return c.Send(missingUserMessage(), kb)
+			}
 		} else {
 			fmt.Println("Request error:", err)
 		}
@@ -505,6 +544,9 @@ func HandleGetLinkConfig(c telebot.Context) error {
 	if err != nil {
 		if apiError != nil {
 			fmt.Println("API error:", apiError.Message)
+			if isMissingUserConfigResponse(apiError, err) {
+				return c.Send(missingUserMessage(), kb)
+			}
 			return c.Send(apiError.Message, kb)
 		} else {
 			fmt.Println("Request error:", err)
@@ -532,7 +574,10 @@ func HandleBalance(c telebot.Context) error {
 	balance, err := client.GetBalance()
 
 	if err != nil {
-		return c.Send("An error occured.")
+		if api.IsMissingUserError(404, err.Error()) {
+			return c.Send(missingUserMessage())
+		}
+		return c.Send("Произошла ошибка. Попробуй чуть позже.")
 	}
 
 	balanceString := `
@@ -584,7 +629,10 @@ func HandleSubmitPaymentRequest(c telebot.Context) error {
 
 	client := api.NewClient(c)
 
-	response, _ := client.SendPaymentRequest(float32(amount))
+	response, err := client.SendPaymentRequest(float32(amount))
+	if err != nil && api.IsMissingUserError(404, response.Message) {
+		return c.Send(missingUserMessage(), kb)
+	}
 
 	return c.Send(response.Message, kb)
 }
