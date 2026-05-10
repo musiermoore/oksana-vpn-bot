@@ -25,13 +25,12 @@ func getMainMenu() *telebot.ReplyMarkup {
 
 	btnWgConfigs := menu.Data("WireGuard", "wireguard_menu_configs")
 	btnVless := menu.Data("VLESS", "vless_menu")
-	btnRegister := menu.Data("Регистрация", "menu_register")
 	btnBalance := menu.Data("Баланс", "menu_balance")
 	btnHelp := menu.Data("Помощь", "menu_help")
 
 	menu.Inline(
 		menu.Row(btnWgConfigs, btnVless),
-		menu.Row(btnRegister, btnBalance, btnHelp),
+		menu.Row(btnBalance, btnHelp),
 	)
 
 	return menu
@@ -110,7 +109,7 @@ func RegisterCommands(bot *telebot.Bot) {
 	btnVless := menu.InlineKeyboard[0][1]
 	btnRegister := guestMenu.InlineKeyboard[0][0]
 	btnHelp := guestMenu.InlineKeyboard[0][1]
-	btnBalance := menu.InlineKeyboard[1][1]
+	btnBalance := menu.InlineKeyboard[1][0]
 
 	bot.Handle("/start", func(c telebot.Context) error {
 		return showStartMenu(c)
@@ -284,13 +283,17 @@ func getConfigMessage(response *api.ConfigResponse, err error, message string) s
 
 func HandleRegisterCommand(c telebot.Context) error {
 	client := api.NewClient(c)
+	status, err := client.GetRegistrationStatus()
+	if err != nil {
+		return c.Send("Не получилось проверить статус регистрации. Попробуй чуть позже.")
+	}
+
+	if status.Registered {
+		return c.Send("Ты уже зарегистрирован. Можно пользоваться ботом.", getMainMenu())
+	}
 
 	if err := client.RegisterUser(); err != nil {
 		return c.Send("Не получилось завершить регистрацию. Попробуй чуть позже.")
-	}
-
-	if err := c.Send("Регистрация завершена. Теперь можно пользоваться ботом."); err != nil {
-		return err
 	}
 
 	return showStartMenu(c)
