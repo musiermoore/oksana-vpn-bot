@@ -32,28 +32,23 @@ func RegisterCommands(bot *telebot.Bot) {
 	menu := &telebot.ReplyMarkup{}
 
 	btnWgConfigs := menu.Data("WireGuard", "wireguard_menu_configs")
-	btnVlessConfigs := menu.Data("Vless", "vless_menu_configs")
+	btnVless := menu.Data("VLESS", "vless_menu")
+	btnRegister := menu.Data("Регистрация", "menu_register")
 	btnBalance := menu.Data("Баланс", "menu_balance")
 	btnHelp := menu.Data("Помощь", "menu_help")
 	menu.Inline(
-		menu.Row(btnWgConfigs, btnVlessConfigs, btnBalance, btnHelp),
+		menu.Row(btnWgConfigs, btnVless),
+		menu.Row(btnRegister, btnBalance, btnHelp),
 	)
 
 	bot.Handle("/start", func(c telebot.Context) error {
 		return c.Send("Привет! Выбери команду:", menu)
 	})
 
-	bot.Handle("/help", HandleHelpCommand)
-	bot.Handle("/register", HandleRegisterCommand)
-	bot.Handle("/wg_configs", HandleWireguardConfigsCommand)
-	bot.Handle("/vless_configs", HandleVlessConfigsCommand)
-	bot.Handle("/vless", HandleVlessCommand)
-	bot.Handle("/balance", HandleBalance)
-	bot.Handle("/payment_request", HandleSendPaymentRequest)
-
 	// Handle main menu buttons
 	bot.Handle(&btnWgConfigs, HandleWireguardConfigsButton)
-	bot.Handle(&btnVlessConfigs, HandleVlessConfigsButton)
+	bot.Handle(&btnVless, HandleVlessButton)
+	bot.Handle(&btnRegister, HandleRegisterCommand)
 	bot.Handle(&btnHelp, HandleHelpButton)
 	bot.Handle(&btnBalance, HandleBalance)
 
@@ -69,10 +64,12 @@ func RegisterCommands(bot *telebot.Bot) {
 			return c.Send("Выбери команду:", menu)
 		} else if data == "to_wireguard_configs" {
 			return HandleWireguardConfigsButton(c)
-		} else if data == "to_vless_configs" {
-			return HandleVlessConfigsButton(c)
+		} else if data == "to_vless" {
+			return HandleVlessButton(c)
 		} else if data == "vless|menu" {
 			return HandleVlessCommand(c)
+		} else if data == "vless|configs" {
+			return HandleVlessConfigsButton(c)
 		} else if data == "vless|link" {
 			return HandleVlessLinkAction(c)
 		} else if data == "vless|qr" {
@@ -127,7 +124,7 @@ func RegisterCommands(bot *telebot.Bot) {
 		}
 
 		// If not waiting — handle normal text
-		return c.Send("Неизвестная команда. Используй /start")
+		return c.Send("Используй /start и кнопки в меню.")
 	})
 }
 
@@ -196,6 +193,10 @@ func HandleVlessConfigsButton(c telebot.Context) error {
 	message := getConfigMessage(response, err, "Выбери конфиг:")
 
 	return c.Send(message, kb)
+}
+
+func HandleVlessButton(c telebot.Context) error {
+	return HandleVlessCommand(c)
 }
 
 func getConfigMessage(response *api.ConfigResponse, err error, message string) string {
@@ -283,10 +284,12 @@ func getVlessKeyboard() *telebot.ReplyMarkup {
 
 	btnLink := kb.Data("Link", "vless|link")
 	btnQR := kb.Data("QR-Code", "vless|qr")
+	btnConfigs := kb.Data("Конфиги", "vless|configs")
 	btnToStart := kb.Data("К началу", "to_start")
 
 	kb.Inline(
 		kb.Row(btnLink, btnQR),
+		kb.Row(btnConfigs),
 		kb.Row(btnToStart),
 	)
 
@@ -372,12 +375,12 @@ func HandleChoosingConfig(c telebot.Context) error {
 	}
 
 	btnWireguardConfigs := kb.Data("WireGuard Конфиги", "to_wireguard_configs")
-	btnVlessConfigs := kb.Data("Vless Конфиги", "to_vless_configs")
+	btnVless := kb.Data("VLESS", "to_vless")
 
 	kb.Inline(
 		kb.Row(actionButtons...),
 		kb.Row(btnWireguardConfigs),
-		kb.Row(btnVlessConfigs),
+		kb.Row(btnVless),
 	)
 
 	return c.Send("Выбери действие для конфига "+configName, kb)
@@ -429,7 +432,7 @@ func getActionConfigKeyboard(configType string) *telebot.ReplyMarkup {
 
 	backAction := "to_wireguard_configs"
 	if configType == "vless" {
-		backAction = "to_vless_configs"
+		backAction = "to_vless"
 	}
 
 	btnPrev := kb.Data("Конфиги", backAction)
