@@ -19,6 +19,10 @@ type Client struct {
 	name     string
 }
 
+func (c *Client) userIDString() string {
+	return fmt.Sprintf("%d", c.userID)
+}
+
 type APIError struct {
 	StatusCode int
 	Message    string
@@ -167,7 +171,7 @@ type Balance struct {
 }
 
 func (c *Client) GetBalance() (Balance, error) {
-	respBytes, err := Request("GET", fmt.Sprintf("users/%s/balance", c.username), nil)
+	respBytes, err := Request("GET", fmt.Sprintf("users/%s/balance", c.userIDString()), nil)
 	if err != nil {
 		return Balance{}, err
 	}
@@ -190,7 +194,7 @@ func (c *Client) GetBalance() (Balance, error) {
 func (c *Client) RegisterUser() error {
 	_, err := Request("POST", "users/register", RegisterUserRequest{
 		Telegram:   c.username,
-		TelegramID: fmt.Sprintf("%d", c.userID),
+		TelegramID: c.userIDString(),
 		Name:       c.name,
 	})
 
@@ -208,7 +212,7 @@ func (c *Client) SendPaymentRequest(amount float32) (PaymentResponse, error) {
 		Bank   string  `json:"bank"`
 	}
 
-	respBytes, err := Request("POST", fmt.Sprintf("users/%s/transactions", c.username), PaymentBody{
+	respBytes, err := Request("POST", fmt.Sprintf("users/%s/transactions", c.userIDString()), PaymentBody{
 		Amount: amount,
 		Bank:   "tbank",
 	})
@@ -300,7 +304,7 @@ func (c *Client) GetVlessConfigs() (ConfigResponse, error) {
 }
 
 func (c *Client) GetConfigs(configType string) (ConfigResponse, error) {
-	respBytes, err := Request("GET", fmt.Sprintf("users/%s/%s/configs", c.username, configType), nil)
+	respBytes, err := Request("GET", fmt.Sprintf("users/%s/%s/configs", c.userIDString(), configType), nil)
 
 	// Even if there's an error, try to parse the response body as it might contain error details
 	var data ConfigResponse
@@ -328,7 +332,7 @@ func (c *Client) GetConfigs(configType string) (ConfigResponse, error) {
 func (c *Client) GetConfigQrCode(configType, configID string) ([]byte, *ConfigResponse, error) {
 	resp, err := request(
 		"GET",
-		fmt.Sprintf("users/%s/configs/%s/%s/qr-code", c.username, configType, configID),
+		fmt.Sprintf("users/%s/configs/%s/%s/qr-code", c.userIDString(), configType, configID),
 		nil,
 		"image/png, application/json",
 	)
@@ -353,7 +357,7 @@ func (c *Client) GetConfigQrCode(configType, configID string) ([]byte, *ConfigRe
 func (c *Client) GetConfigFile(configType, configID string) ([]byte, *ConfigResponse, error) {
 	resp, err := request(
 		"GET",
-		fmt.Sprintf("users/%s/configs/%s/%s/download", c.username, configType, configID),
+		fmt.Sprintf("users/%s/configs/%s/%s/download", c.userIDString(), configType, configID),
 		nil,
 		"text/plain, application/json",
 	)
@@ -382,7 +386,7 @@ func (c *Client) GetConfigFile(configType, configID string) ([]byte, *ConfigResp
 func (c *Client) GetLink(configType, config string) (string, *ConfigResponse, error) {
 	resp, err := request(
 		"GET",
-		fmt.Sprintf("users/%s/configs/%s/%s/download", c.username, configType, config),
+		fmt.Sprintf("users/%s/configs/%s/%s/download", c.userIDString(), configType, config),
 		nil,
 		"text/plain, application/json",
 	)
@@ -402,7 +406,7 @@ func (c *Client) GetLink(configType, config string) (string, *ConfigResponse, er
 func (c *Client) GetVlessSubscriptionLink() (string, *APIError, error) {
 	resp, err := request(
 		"GET",
-		fmt.Sprintf("users/%s/vless/link", c.username),
+		fmt.Sprintf("users/%s/vless/link", c.userIDString()),
 		nil,
 		"text/plain, application/json",
 	)
@@ -420,7 +424,7 @@ func (c *Client) GetVlessSubscriptionLink() (string, *APIError, error) {
 func (c *Client) GetVlessSubscriptionQRCode() ([]byte, *APIError, error) {
 	resp, err := request(
 		"GET",
-		fmt.Sprintf("users/%s/vless/qr-code", c.username),
+		fmt.Sprintf("users/%s/vless/qr-code", c.userIDString()),
 		nil,
 		"image/png, application/json",
 	)
