@@ -66,8 +66,14 @@ type RegisterUserRequest struct {
 	Name       string `json:"name"`
 }
 
+type RegistrationStatus struct {
+	Registered                       bool    `json:"registered"`
+	ActiveSubscriptionEndDate        *string `json:"active_subscription_end_date"`
+	HasMoneyForNextSubscriptionMonth bool    `json:"has_money_for_next_subscription_month"`
+}
+
 func MissingUserMessage() string {
-	return "Я не нашла тебя в базе. Используй /register и попробуй ещё раз."
+	return "Я не нашла тебя в базе. Нажми кнопку регистрации и попробуй ещё раз."
 }
 
 func IsMissingUserError(statusCode int, message string) bool {
@@ -199,6 +205,20 @@ func (c *Client) RegisterUser() error {
 	})
 
 	return err
+}
+
+func (c *Client) GetRegistrationStatus() (RegistrationStatus, error) {
+	respBytes, err := Request("GET", fmt.Sprintf("users/%s/registration-status", c.userIDString()), nil)
+	if err != nil {
+		return RegistrationStatus{}, err
+	}
+
+	var data RegistrationStatus
+	if err := json.Unmarshal(respBytes, &data); err != nil {
+		return RegistrationStatus{}, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	return data, nil
 }
 
 type PaymentResponse struct {

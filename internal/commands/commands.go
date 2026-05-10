@@ -20,6 +20,80 @@ func missingUserMessage() string {
 	return api.MissingUserMessage()
 }
 
+func getMainMenu() *telebot.ReplyMarkup {
+	menu := &telebot.ReplyMarkup{}
+
+	btnWgConfigs := menu.Data("WireGuard", "wireguard_menu_configs")
+	btnVless := menu.Data("VLESS", "vless_menu")
+	btnRegister := menu.Data("Регистрация", "menu_register")
+	btnBalance := menu.Data("Баланс", "menu_balance")
+	btnHelp := menu.Data("Помощь", "menu_help")
+
+	menu.Inline(
+		menu.Row(btnWgConfigs, btnVless),
+		menu.Row(btnRegister, btnBalance, btnHelp),
+	)
+
+	return menu
+}
+
+func getGuestMenu() *telebot.ReplyMarkup {
+	menu := &telebot.ReplyMarkup{}
+
+	btnRegister := menu.Data("Регистрация", "menu_register")
+	btnHelp := menu.Data("Помощь", "menu_help")
+
+	menu.Inline(
+		menu.Row(btnRegister, btnHelp),
+	)
+
+	return menu
+}
+
+func getTopUpReminder(status api.RegistrationStatus) string {
+	if !status.Registered || status.HasMoneyForNextSubscriptionMonth {
+		return ""
+	}
+
+	return "\n\nПополнение может понадобиться уже скоро. На следующий месяц баланса сейчас не хватает."
+}
+
+func getSubscriptionDetails(status api.RegistrationStatus) string {
+	details := ""
+
+	if status.ActiveSubscriptionEndDate != nil && strings.TrimSpace(*status.ActiveSubscriptionEndDate) != "" {
+		details += fmt.Sprintf("\nПодписка активна до: %s", *status.ActiveSubscriptionEndDate)
+	}
+
+	if !status.HasMoneyForNextSubscriptionMonth {
+		details += "\n\nНапоминание: баланса сейчас не хватает на следующий месяц подписки."
+	}
+
+	return details
+}
+
+func getStartMessage(status api.RegistrationStatus) string {
+	if !status.Registered {
+		return "Привет! Сначала нужно зарегистрироваться. Нажми кнопку ниже."
+	}
+
+	return "Привет! Выбери команду:" + getTopUpReminder(status)
+}
+
+func showStartMenu(c telebot.Context) error {
+	client := api.NewClient(c)
+	status, err := client.GetRegistrationStatus()
+	if err != nil {
+		return c.Send("Не получилось проверить статус регистрации. Попробуй чуть позже.")
+	}
+
+	if !status.Registered {
+		return c.Send(getStartMessage(status), getGuestMenu())
+	}
+
+	return c.Send(getStartMessage(status), getMainMenu())
+}
+
 func isMissingUserConfigResponse(response *api.ConfigResponse, err error) bool {
 	if err == nil || response == nil {
 		return false
@@ -29,20 +103,17 @@ func isMissingUserConfigResponse(response *api.ConfigResponse, err error) bool {
 }
 
 func RegisterCommands(bot *telebot.Bot) {
-	menu := &telebot.ReplyMarkup{}
+	menu := getMainMenu()
+	guestMenu := getGuestMenu()
 
-	btnWgConfigs := menu.Data("WireGuard", "wireguard_menu_configs")
-	btnVless := menu.Data("VLESS", "vless_menu")
-	btnRegister := menu.Data("Регистрация", "menu_register")
-	btnBalance := menu.Data("Баланс", "menu_balance")
-	btnHelp := menu.Data("Помощь", "menu_help")
-	menu.Inline(
-		menu.Row(btnWgConfigs, btnVless),
-		menu.Row(btnRegister, btnBalance, btnHelp),
-	)
+	btnWgConfigs := menu.InlineKeyboard[0][0]
+	btnVless := menu.InlineKeyboard[0][1]
+	btnRegister := guestMenu.InlineKeyboard[0][0]
+	btnHelp := guestMenu.InlineKeyboard[0][1]
+	btnBalance := menu.InlineKeyboard[1][1]
 
 	bot.Handle("/start", func(c telebot.Context) error {
-		return c.Send("Привет! Выбери команду:", menu)
+		return showStartMenu(c)
 	})
 
 	// Handle main menu buttons
@@ -61,7 +132,7 @@ func RegisterCommands(bot *telebot.Bot) {
 		} else if strings.HasPrefix(data, "config|") {
 			return HandleChoosingConfig(c)
 		} else if data == "to_start" {
-			return c.Send("Выбери команду:", menu)
+			return showStartMenu(c)
 		} else if data == "to_wireguard_configs" {
 			return HandleWireguardConfigsButton(c)
 		} else if data == "to_vless" {
@@ -218,7 +289,11 @@ func HandleRegisterCommand(c telebot.Context) error {
 		return c.Send("Не получилось завершить регистрацию. Попробуй чуть позже.")
 	}
 
-	return c.Send("Регистрация завершена. Теперь можно пользоваться ботом.")
+	if err := c.Send("Регистрация завершена. Теперь можно пользоваться ботом."); err != nil {
+		return err
+	}
+
+	return showStartMenu(c)
 }
 
 func getHelpData() (*telebot.ReplyMarkup, string) {
@@ -231,7 +306,7 @@ func getHelpData() (*telebot.ReplyMarkup, string) {
 Впн будет через WireGuard, поэтому качайте на пк и/или телефон
 
 Настройка для пк/телефона:
-1. Скачиваете конфиг (Команда /configs)
+1. Скачиваете конфиг через кнопки в боте
 2. Нажимаете плюсик
 3. Выбираете загрузку файл
 4. Жмете подключиться
@@ -571,7 +646,6 @@ func HandleBalance(c telebot.Context) error {
 
 	client := api.NewClient(c)
 	balance, err := client.GetBalance()
-
 	if err != nil {
 		if api.IsMissingUserError(404, err.Error()) {
 			return c.Send(missingUserMessage())
@@ -579,15 +653,21 @@ func HandleBalance(c telebot.Context) error {
 		return c.Send("Произошла ошибка. Попробуй чуть позже.")
 	}
 
+	status, err := client.GetRegistrationStatus()
+	if err != nil {
+		return c.Send("Произошла ошибка. Попробуй чуть позже.")
+	}
+
 	balanceString := `
 *Баланс:* %.2f
 *Долг:* %.2f
+%s
 
 Деньги отправлять на Т-Банк по номеру +79230399748
  
 После пополнения, отправьте запрос через команду по кнопке "Отправить запрос"
 `
-	balanceString = fmt.Sprintf(balanceString, balance.Amount, balance.Debt)
+	balanceString = fmt.Sprintf(balanceString, balance.Amount, balance.Debt, getSubscriptionDetails(status))
 	balanceString = utils.EscapeMarkdownV2(balanceString)
 
 	return c.Send(balanceString, &telebot.SendOptions{
