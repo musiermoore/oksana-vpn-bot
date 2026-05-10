@@ -213,10 +213,6 @@ func getConfigMessage(response *api.ConfigResponse, err error, message string) s
 func HandleRegisterCommand(c telebot.Context) error {
 	client := api.NewClient(c)
 
-	if strings.TrimSpace(c.Sender().Username) == "" {
-		return c.Send("У тебя не указан Telegram username. Поставь username в настройках Telegram и попробуй /register ещё раз.")
-	}
-
 	if err := client.RegisterUser(); err != nil {
 		return c.Send("Не получилось завершить регистрацию. Попробуй чуть позже.")
 	}
