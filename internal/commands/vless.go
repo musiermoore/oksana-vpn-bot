@@ -15,12 +15,10 @@ func getVlessKeyboard() *telebot.ReplyMarkup {
 
 	btnLink := kb.Data("Link", "vless|link")
 	btnQR := kb.Data("QR-Code", "vless|qr")
-	btnConfigs := kb.Data("Конфиги", "vless|configs")
 	btnToStart := kb.Data("К началу", "to_start")
 
 	kb.Inline(
 		kb.Row(btnLink, btnQR),
-		kb.Row(btnConfigs),
 		kb.Row(btnToStart),
 	)
 
