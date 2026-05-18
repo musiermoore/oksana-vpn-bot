@@ -8,6 +8,7 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"gopkg.in/telebot.v4"
@@ -21,6 +22,16 @@ type Client struct {
 
 func (c *Client) userIDString() string {
 	return fmt.Sprintf("%d", c.userID)
+}
+
+func (c *Client) userPath(path string) string {
+	base := fmt.Sprintf("users/%s", c.userIDString())
+	path = strings.TrimPrefix(path, "/")
+	if path == "" {
+		return base
+	}
+
+	return base + "/" + path
 }
 
 type APIError struct {
@@ -66,10 +77,42 @@ type RegisterUserRequest struct {
 	Name       string `json:"name"`
 }
 
+type SaveUserIDRequest struct {
+	Telegram string `json:"telegram"`
+	Name     string `json:"name"`
+}
+
 type RegistrationStatus struct {
 	Registered                       bool    `json:"registered"`
 	ActiveSubscriptionEndDate        *string `json:"active_subscription_end_date"`
 	HasMoneyForNextSubscriptionMonth bool    `json:"has_money_for_next_subscription_month"`
+}
+
+func (r *RegistrationStatus) UnmarshalJSON(data []byte) error {
+	var payload struct {
+		Registered                       bool    `json:"registered"`
+		ActiveSubscriptionEndDate        *string `json:"active_subscription_end_date"`
+		HasMoneyForNextSubscriptionMonth bool    `json:"has_money_for_next_subscription_month"`
+		Attributes                       struct {
+			Registered                       bool    `json:"registered"`
+			ActiveSubscriptionEndDate        *string `json:"active_subscription_end_date"`
+			HasMoneyForNextSubscriptionMonth bool    `json:"has_money_for_next_subscription_month"`
+		} `json:"attributes"`
+	}
+
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return err
+	}
+
+	r.Registered = payload.Registered || payload.Attributes.Registered
+	if payload.ActiveSubscriptionEndDate != nil {
+		r.ActiveSubscriptionEndDate = payload.ActiveSubscriptionEndDate
+	} else {
+		r.ActiveSubscriptionEndDate = payload.Attributes.ActiveSubscriptionEndDate
+	}
+	r.HasMoneyForNextSubscriptionMonth = payload.HasMoneyForNextSubscriptionMonth || payload.Attributes.HasMoneyForNextSubscriptionMonth
+
+	return nil
 }
 
 func MissingUserMessage() string {
@@ -177,28 +220,62 @@ type Balance struct {
 }
 
 func (c *Client) GetBalance() (Balance, error) {
-	respBytes, err := Request("GET", fmt.Sprintf("users/%s/balance", c.userIDString()), nil)
+	respBytes, err := Request("GET", c.userPath("balance"), nil)
 	if err != nil {
 		return Balance{}, err
 	}
 
-	// Parse JSON response
 	var data struct {
-		Balance float64 `json:"balance"`
-		Debt    float64 `json:"debt"`
+		Balance    float64 `json:"balance"`
+		Amount     float64 `json:"amount"`
+		Debt       float64 `json:"debt"`
+		Attributes struct {
+			Balance float64 `json:"balance"`
+			Amount  float64 `json:"amount"`
+			Debt    float64 `json:"debt"`
+		} `json:"attributes"`
 	}
-	if err := json.Unmarshal(respBytes, &data); err != nil {
+	if err := unmarshalAPIData(respBytes, &data); err != nil {
 		return Balance{}, fmt.Errorf("failed to parse JSON: %w", err)
 	}
 
+	amount := data.Amount
+	if amount == 0 {
+		amount = data.Balance
+	}
+	if amount == 0 {
+		amount = data.Attributes.Amount
+	}
+	if amount == 0 {
+		amount = data.Attributes.Balance
+	}
+
+	debt := data.Debt
+	if debt == 0 {
+		debt = data.Attributes.Debt
+	}
+
 	return Balance{
-		Amount: data.Balance,
-		Debt:   data.Debt,
+		Amount: amount,
+		Debt:   debt,
 	}, nil
 }
 
 func (c *Client) RegisterUser() error {
-	_, err := Request("POST", "users/register", RegisterUserRequest{
+	resp, err := request("POST", c.userPath("save-id"), SaveUserIDRequest{
+		Telegram: c.username,
+		Name:     c.name,
+	}, "application/json")
+	if err == nil {
+		return nil
+	}
+
+	// Keep compatibility with older backends during rollout.
+	if resp.StatusCode != http.StatusNotFound && resp.StatusCode != http.StatusMethodNotAllowed {
+		return err
+	}
+
+	_, err = Request("POST", "users/register", RegisterUserRequest{
 		Telegram:   c.username,
 		TelegramID: c.userIDString(),
 		Name:       c.name,
@@ -208,13 +285,13 @@ func (c *Client) RegisterUser() error {
 }
 
 func (c *Client) GetRegistrationStatus() (RegistrationStatus, error) {
-	respBytes, err := Request("GET", fmt.Sprintf("users/%s/registration-status", c.userIDString()), nil)
+	respBytes, err := Request("GET", c.userPath("registration-status"), nil)
 	if err != nil {
 		return RegistrationStatus{}, err
 	}
 
 	var data RegistrationStatus
-	if err := json.Unmarshal(respBytes, &data); err != nil {
+	if err := unmarshalAPIData(respBytes, &data); err != nil {
 		return RegistrationStatus{}, fmt.Errorf("failed to parse JSON: %w", err)
 	}
 
@@ -232,14 +309,10 @@ func (c *Client) SendPaymentRequest(amount float32) (PaymentResponse, error) {
 		Bank   string  `json:"bank"`
 	}
 
-	respBytes, err := Request("POST", fmt.Sprintf("users/%s/transactions", c.userIDString()), PaymentBody{
+	respBytes, err := Request("POST", c.userPath("transactions"), PaymentBody{
 		Amount: amount,
 		Bank:   "tbank",
 	})
-
-	var data struct {
-		Message string `json:"message"`
-	}
 
 	if len(respBytes) == 0 {
 		return PaymentResponse{
@@ -247,19 +320,20 @@ func (c *Client) SendPaymentRequest(amount float32) (PaymentResponse, error) {
 		}, fmt.Errorf("empty response from API: %w", err)
 	}
 
-	if jsonErr := json.Unmarshal(respBytes, &data); jsonErr != nil {
+	message, parseErr := parseAPIMessage(respBytes)
+	if parseErr != nil {
 		return PaymentResponse{
 			Message: "Что-то пошло не так :(",
-		}, fmt.Errorf("failed to parse JSON: %w; raw: %s", jsonErr, string(respBytes))
+		}, fmt.Errorf("failed to parse JSON: %w; raw: %s", parseErr, string(respBytes))
 	}
 
-	if data.Message == "" {
-		data.Message = "Что-то пошло не так :("
+	if message == "" {
+		message = "Что-то пошло не так :("
 	}
 
 	return PaymentResponse{
 		Status:  err == nil,
-		Message: data.Message,
+		Message: message,
 	}, nil
 }
 
@@ -279,6 +353,49 @@ type Config struct {
 	Name   string `json:"name"`
 }
 
+func (c *Config) UnmarshalJSON(data []byte) error {
+	var payload struct {
+		ID         json.RawMessage `json:"id"`
+		UserID     json.RawMessage `json:"user_id"`
+		Name       string          `json:"name"`
+		Attributes struct {
+			UserID json.RawMessage `json:"user_id"`
+			Name   string          `json:"name"`
+		} `json:"attributes"`
+	}
+
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return err
+	}
+
+	id, err := parseOptionalInt32(payload.ID)
+	if err != nil {
+		return err
+	}
+
+	userID, err := parseOptionalInt32(payload.UserID)
+	if err != nil {
+		return err
+	}
+	if userID == 0 {
+		userID, err = parseOptionalInt32(payload.Attributes.UserID)
+		if err != nil {
+			return err
+		}
+	}
+
+	name := payload.Name
+	if name == "" {
+		name = payload.Attributes.Name
+	}
+
+	c.ID = id
+	c.UserID = userID
+	c.Name = name
+
+	return nil
+}
+
 type ConfigResponse struct {
 	Configs []Config `json:"configs"`
 	Message string   `json:"message"`
@@ -286,23 +403,24 @@ type ConfigResponse struct {
 }
 
 func parseConfigAPIError(resp apiResponse, reqErr error) (*ConfigResponse, *APIError, error) {
-	var data ConfigResponse
-	if len(resp.Body) > 0 {
-		if err := json.Unmarshal(resp.Body, &data); err != nil {
-			if reqErr != nil {
-				return nil, &APIError{
-					StatusCode: resp.StatusCode,
-					Message:    string(resp.Body),
-				}, reqErr
-			}
-			return nil, nil, fmt.Errorf("failed to parse JSON: %w", err)
+	data, dataErr := parseConfigResponse(resp.Body)
+	if dataErr != nil {
+		if reqErr != nil {
+			return nil, &APIError{
+				StatusCode: resp.StatusCode,
+				Message:    string(resp.Body),
+			}, reqErr
 		}
+		return nil, nil, fmt.Errorf("failed to parse JSON: %w", dataErr)
 	}
 
 	apiErr := &APIError{
 		StatusCode: resp.StatusCode,
 		Message:    data.Message,
 		Type:       data.Type,
+	}
+	if apiErr.Message == "" {
+		apiErr.Message, _ = parseAPIMessage(resp.Body)
 	}
 	if apiErr.Message == "" {
 		apiErr.Message = string(resp.Body)
@@ -324,21 +442,19 @@ func (c *Client) GetVlessConfigs() (ConfigResponse, error) {
 }
 
 func (c *Client) GetConfigs(configType string) (ConfigResponse, error) {
-	respBytes, err := Request("GET", fmt.Sprintf("users/%s/%s/configs", c.userIDString(), configType), nil)
-
-	// Even if there's an error, try to parse the response body as it might contain error details
-	var data ConfigResponse
-	if len(respBytes) > 0 {
-		if jsonErr := json.Unmarshal(respBytes, &data); jsonErr != nil {
-			// If we can't parse JSON and there was a request error, return both
-			if err != nil {
-				return ConfigResponse{}, err
-			}
-			return ConfigResponse{}, fmt.Errorf("failed to parse JSON: %w", jsonErr)
-		}
+	respBytes, err := Request("GET", c.userPath(fmt.Sprintf("configs/%s", configType)), nil)
+	if err != nil && isRouteFallbackResponse(err) {
+		respBytes, err = Request("GET", fmt.Sprintf("users/%s/%s/configs", c.userIDString(), configType), nil)
 	}
 
-	// If the response indicates an error, return it with the data
+	data, parseErr := parseConfigResponse(respBytes)
+	if parseErr != nil {
+		if err != nil {
+			return ConfigResponse{}, err
+		}
+		return ConfigResponse{}, fmt.Errorf("failed to parse JSON: %w", parseErr)
+	}
+
 	if data.Type != "" || data.Message != "" || err != nil {
 		if data.Message != "" {
 			return data, fmt.Errorf("api returned error: %s", data.Message)
@@ -352,7 +468,7 @@ func (c *Client) GetConfigs(configType string) (ConfigResponse, error) {
 func (c *Client) GetConfigQrCode(configType, configID string) ([]byte, *ConfigResponse, error) {
 	resp, err := request(
 		"GET",
-		fmt.Sprintf("users/%s/configs/%s/%s/qr-code", c.userIDString(), configType, configID),
+		c.userPath(fmt.Sprintf("configs/%s/%s/qr-code", configType, configID)),
 		nil,
 		"image/png, application/json",
 	)
@@ -377,7 +493,7 @@ func (c *Client) GetConfigQrCode(configType, configID string) ([]byte, *ConfigRe
 func (c *Client) GetConfigFile(configType, configID string) ([]byte, *ConfigResponse, error) {
 	resp, err := request(
 		"GET",
-		fmt.Sprintf("users/%s/configs/%s/%s/download", c.userIDString(), configType, configID),
+		c.userPath(fmt.Sprintf("configs/%s/%s/download", configType, configID)),
 		nil,
 		"text/plain, application/json",
 	)
@@ -391,9 +507,8 @@ func (c *Client) GetConfigFile(configType, configID string) ([]byte, *ConfigResp
 
 	// Try to detect if the response is JSON (error) or file (success)
 	if len(resp.Body) > 0 && resp.Body[0] == '{' {
-		// Looks like JSON
-		var data ConfigResponse
-		if err := json.Unmarshal(resp.Body, &data); err != nil {
+		data, err := parseConfigResponse(resp.Body)
+		if err != nil {
 			return nil, nil, fmt.Errorf("failed to parse JSON: %w", err)
 		}
 		return nil, &data, fmt.Errorf("api returned error: %s", data.Message)
@@ -406,7 +521,7 @@ func (c *Client) GetConfigFile(configType, configID string) ([]byte, *ConfigResp
 func (c *Client) GetLink(configType, config string) (string, *ConfigResponse, error) {
 	resp, err := request(
 		"GET",
-		fmt.Sprintf("users/%s/configs/%s/%s/download", c.userIDString(), configType, config),
+		c.userPath(fmt.Sprintf("configs/%s/%s/download", configType, config)),
 		nil,
 		"text/plain, application/json",
 	)
@@ -418,6 +533,19 @@ func (c *Client) GetLink(configType, config string) (string, *ConfigResponse, er
 		return "", nil, err
 	}
 
+	if isJSONContentType(resp.ContentType) {
+		link, linkErr := parseLinkValue(resp.Body)
+		if linkErr == nil {
+			return link, nil, nil
+		}
+
+		data, parseErr := parseConfigResponse(resp.Body)
+		if parseErr != nil {
+			return "", nil, parseErr
+		}
+		return "", &data, fmt.Errorf("api returned error: %s", data.Message)
+	}
+
 	link := string(resp.Body)
 
 	return link, nil, nil
@@ -426,7 +554,7 @@ func (c *Client) GetLink(configType, config string) (string, *ConfigResponse, er
 func (c *Client) GetVlessSubscriptionLink() (string, *APIError, error) {
 	resp, err := request(
 		"GET",
-		fmt.Sprintf("users/%s/vless/link", c.userIDString()),
+		c.userPath("vless/link"),
 		nil,
 		"text/plain, application/json",
 	)
@@ -438,13 +566,22 @@ func (c *Client) GetVlessSubscriptionLink() (string, *APIError, error) {
 		return "", nil, err
 	}
 
+	if isJSONContentType(resp.ContentType) {
+		link, parseErr := parseLinkValue(resp.Body)
+		if parseErr == nil {
+			return link, nil, nil
+		}
+		_, apiErr, parseErr := parseConfigAPIError(resp, err)
+		return "", apiErr, parseErr
+	}
+
 	return string(resp.Body), nil, nil
 }
 
 func (c *Client) GetVlessSubscriptionQRCode() ([]byte, *APIError, error) {
 	resp, err := request(
 		"GET",
-		fmt.Sprintf("users/%s/vless/qr-code", c.userIDString()),
+		c.userPath("vless/qr-code"),
 		nil,
 		"image/png, application/json",
 	)
@@ -464,4 +601,174 @@ func (c *Client) GetVlessSubscriptionQRCode() ([]byte, *APIError, error) {
 	}
 
 	return resp.Body, nil, nil
+}
+
+func isRouteFallbackResponse(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	message := err.Error()
+	return strings.Contains(message, "api error 404:") || strings.Contains(message, "api error 405:")
+}
+
+func isJSONContentType(contentType string) bool {
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err == nil {
+		contentType = mediaType
+	}
+
+	return contentType == "application/json"
+}
+
+func parseOptionalInt32(raw json.RawMessage) (int32, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0, nil
+	}
+
+	var intValue int32
+	if err := json.Unmarshal(raw, &intValue); err == nil {
+		return intValue, nil
+	}
+
+	var stringValue string
+	if err := json.Unmarshal(raw, &stringValue); err == nil {
+		if strings.TrimSpace(stringValue) == "" {
+			return 0, nil
+		}
+
+		value, convErr := strconv.Atoi(stringValue)
+		if convErr != nil {
+			return 0, convErr
+		}
+
+		return int32(value), nil
+	}
+
+	return 0, fmt.Errorf("unsupported numeric value: %s", string(raw))
+}
+
+func unmarshalAPIData(body []byte, target any) error {
+	if len(body) == 0 {
+		return io.EOF
+	}
+
+	var envelope struct {
+		Data json.RawMessage `json:"data"`
+	}
+
+	if err := json.Unmarshal(body, &envelope); err == nil && len(envelope.Data) > 0 && string(envelope.Data) != "null" {
+		return json.Unmarshal(envelope.Data, target)
+	}
+
+	return json.Unmarshal(body, target)
+}
+
+func parseAPIMessage(body []byte) (string, error) {
+	var envelope struct {
+		Message string              `json:"message"`
+		Errors  map[string][]string `json:"errors"`
+		Data    struct {
+			Message string `json:"message"`
+		} `json:"data"`
+	}
+
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return "", err
+	}
+
+	if envelope.Message != "" {
+		return envelope.Message, nil
+	}
+
+	if envelope.Data.Message != "" {
+		return envelope.Data.Message, nil
+	}
+
+	for _, messages := range envelope.Errors {
+		if len(messages) > 0 && messages[0] != "" {
+			return messages[0], nil
+		}
+	}
+
+	return "", nil
+}
+
+func parseConfigResponse(body []byte) (ConfigResponse, error) {
+	if len(body) == 0 {
+		return ConfigResponse{}, nil
+	}
+
+	var response ConfigResponse
+	if err := json.Unmarshal(body, &response); err == nil && (len(response.Configs) > 0 || response.Message != "" || response.Type != "") {
+		return response, nil
+	}
+
+	var envelope struct {
+		Data    json.RawMessage     `json:"data"`
+		Message string              `json:"message"`
+		Type    string              `json:"type"`
+		Errors  map[string][]string `json:"errors"`
+	}
+
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return ConfigResponse{}, err
+	}
+
+	response.Message = envelope.Message
+	response.Type = envelope.Type
+	if response.Message == "" {
+		for _, messages := range envelope.Errors {
+			if len(messages) > 0 && messages[0] != "" {
+				response.Message = messages[0]
+				break
+			}
+		}
+	}
+
+	if len(envelope.Data) == 0 || string(envelope.Data) == "null" {
+		return response, nil
+	}
+
+	if err := json.Unmarshal(envelope.Data, &response.Configs); err == nil {
+		return response, nil
+	}
+
+	var nested struct {
+		Configs []Config `json:"configs"`
+	}
+	if err := json.Unmarshal(envelope.Data, &nested); err == nil {
+		response.Configs = nested.Configs
+		return response, nil
+	}
+
+	return response, fmt.Errorf("unsupported configs payload: %s", string(envelope.Data))
+}
+
+func parseLinkValue(body []byte) (string, error) {
+	var envelope struct {
+		Data struct {
+			Link string `json:"link"`
+			URL  string `json:"url"`
+		} `json:"data"`
+		Link string `json:"link"`
+		URL  string `json:"url"`
+	}
+
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return "", err
+	}
+
+	switch {
+	case envelope.Data.Link != "":
+		return envelope.Data.Link, nil
+	case envelope.Data.URL != "":
+		return envelope.Data.URL, nil
+	case envelope.Link != "":
+		return envelope.Link, nil
+	case envelope.URL != "":
+		return envelope.URL, nil
+	default:
+		return "", fmt.Errorf("link value not found")
+	}
 }
