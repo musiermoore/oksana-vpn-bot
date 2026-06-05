@@ -146,18 +146,49 @@ func TestGetVlessSubscriptionLinkParsesJSONLinkPayload(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":{"link":"vless://subscription"}}`))
+		_, _ = w.Write([]byte(`{"data":{"link":"vless://subscription","happ_deep_link":"happ://deep","v2raytun_deeplink":"v2raytun://deep"}}`))
 	})
 
-	link, apiErr, err := client.GetVlessSubscriptionLink()
+	linkResponse, apiErr, err := client.GetVlessSubscriptionLink()
 	if err != nil {
 		t.Fatalf("GetVlessSubscriptionLink returned error: %v", err)
 	}
 	if apiErr != nil {
 		t.Fatalf("expected nil API error, got: %#v", apiErr)
 	}
-	if link != "vless://subscription" {
-		t.Fatalf("unexpected link: %s", link)
+	if linkResponse.Link != "vless://subscription" {
+		t.Fatalf("unexpected link: %#v", linkResponse)
+	}
+	if linkResponse.HappDeepLink != "happ://deep" {
+		t.Fatalf("unexpected Happ deep link: %#v", linkResponse)
+	}
+	if linkResponse.V2RayTunDeepLink != "v2raytun://deep" {
+		t.Fatalf("unexpected V2RayTun deep link: %#v", linkResponse)
+	}
+}
+
+func TestGetVlessSubscriptionLinkFallsBackToPlainStringResponse(t *testing.T) {
+	client := withTestAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/users/123/vless/link" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte(`vless://subscription`))
+	})
+
+	linkResponse, apiErr, err := client.GetVlessSubscriptionLink()
+	if err != nil {
+		t.Fatalf("GetVlessSubscriptionLink returned error: %v", err)
+	}
+	if apiErr != nil {
+		t.Fatalf("expected nil API error, got: %#v", apiErr)
+	}
+	if linkResponse.Link != "vless://subscription" {
+		t.Fatalf("unexpected link response: %#v", linkResponse)
+	}
+	if linkResponse.HappDeepLink != "" || linkResponse.V2RayTunDeepLink != "" {
+		t.Fatalf("expected empty deep links for plain string response, got %#v", linkResponse)
 	}
 }
 

@@ -402,6 +402,12 @@ type ConfigResponse struct {
 	Type    string   `json:"type"`
 }
 
+type VlessSubscriptionLinkResponse struct {
+	Link             string `json:"link"`
+	HappDeepLink     string `json:"happ_deep_link"`
+	V2RayTunDeepLink string `json:"v2raytun_deeplink"`
+}
+
 func parseConfigAPIError(resp apiResponse, reqErr error) (*ConfigResponse, *APIError, error) {
 	data, dataErr := parseConfigResponse(resp.Body)
 	if dataErr != nil {
@@ -551,7 +557,7 @@ func (c *Client) GetLink(configType, config string) (string, *ConfigResponse, er
 	return link, nil, nil
 }
 
-func (c *Client) GetVlessSubscriptionLink() (string, *APIError, error) {
+func (c *Client) GetVlessSubscriptionLink() (VlessSubscriptionLinkResponse, *APIError, error) {
 	resp, err := request(
 		"GET",
 		c.userPath("vless/link"),
@@ -561,21 +567,21 @@ func (c *Client) GetVlessSubscriptionLink() (string, *APIError, error) {
 	if err != nil {
 		_, apiErr, parseErr := parseConfigAPIError(resp, err)
 		if apiErr != nil {
-			return "", apiErr, parseErr
+			return VlessSubscriptionLinkResponse{}, apiErr, parseErr
 		}
-		return "", nil, err
+		return VlessSubscriptionLinkResponse{}, nil, err
 	}
 
 	if isJSONContentType(resp.ContentType) {
-		link, parseErr := parseLinkValue(resp.Body)
+		linkResponse, parseErr := parseVlessSubscriptionLinkResponse(resp.Body)
 		if parseErr == nil {
-			return link, nil, nil
+			return linkResponse, nil, nil
 		}
 		_, apiErr, parseErr := parseConfigAPIError(resp, err)
-		return "", apiErr, parseErr
+		return VlessSubscriptionLinkResponse{}, apiErr, parseErr
 	}
 
-	return string(resp.Body), nil, nil
+	return VlessSubscriptionLinkResponse{Link: string(resp.Body)}, nil, nil
 }
 
 func (c *Client) GetVlessSubscriptionQRCode() ([]byte, *APIError, error) {
@@ -771,4 +777,22 @@ func parseLinkValue(body []byte) (string, error) {
 	default:
 		return "", fmt.Errorf("link value not found")
 	}
+}
+
+func parseVlessSubscriptionLinkResponse(body []byte) (VlessSubscriptionLinkResponse, error) {
+	link, err := parseLinkValue(body)
+	if err != nil {
+		return VlessSubscriptionLinkResponse{}, err
+	}
+
+	var response VlessSubscriptionLinkResponse
+	if err := unmarshalAPIData(body, &response); err != nil {
+		return VlessSubscriptionLinkResponse{}, err
+	}
+
+	if response.Link == "" {
+		response.Link = link
+	}
+
+	return response, nil
 }

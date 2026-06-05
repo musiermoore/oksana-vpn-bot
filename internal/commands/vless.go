@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"html"
-	"net/url"
 	"oksana-vpn-telegram-bot/pkg/api"
 
 	telebot "gopkg.in/telebot.v4"
@@ -85,23 +84,30 @@ func HandleVlessCommand(c telebot.Context) error {
 	return c.Send("Выбери действие для VLESS:", getVlessKeyboard())
 }
 
-func buildVlessLinkMessage(link string) string {
-	escapedLink := url.QueryEscape(link)
-	happLink := fmt.Sprintf("happ://add-subscription?url=%s", escapedLink)
-	v2rayTunLink := fmt.Sprintf("v2raytun://install-sub?url=%s", escapedLink)
+func getVlessClientLink(preferredLink, fallbackLink string) string {
+	if preferredLink != "" {
+		return preferredLink
+	}
+
+	return fallbackLink
+}
+
+func buildVlessLinkMessage(linkResponse api.VlessSubscriptionLinkResponse) string {
+	happLink := getVlessClientLink(linkResponse.HappDeepLink, linkResponse.Link)
+	v2rayTunLink := getVlessClientLink(linkResponse.V2RayTunDeepLink, linkResponse.Link)
 
 	return fmt.Sprintf(
 		"Вот твоя ссылка 😽\n\n<a href=\"%s\">Добавить подписку в Happ</a>\n\n<a href=\"%s\">Добавить подписку в V2RayTun</a>\n\nИли просто вставьте ссылку в приложении:\n<code>%s</code>",
 		html.EscapeString(happLink),
 		html.EscapeString(v2rayTunLink),
-		html.EscapeString(link),
+		html.EscapeString(linkResponse.Link),
 	)
 }
 
 func HandleVlessLinkAction(c telebot.Context) error {
 	client := api.NewClient(c)
 	kb := getVlessResultKeyboard()
-	link, apiErr, err := client.GetVlessSubscriptionLink()
+	linkResponse, apiErr, err := client.GetVlessSubscriptionLink()
 	if err != nil {
 		if apiErr != nil {
 			fmt.Println("API error:", apiErr.Message)
@@ -112,7 +118,7 @@ func HandleVlessLinkAction(c telebot.Context) error {
 		return c.Send("Не получилось получить VLESS ссылку. Попробуй чуть позже.", kb)
 	}
 
-	return c.Send(buildVlessLinkMessage(link), &telebot.SendOptions{
+	return c.Send(buildVlessLinkMessage(linkResponse), &telebot.SendOptions{
 		ParseMode:   telebot.ModeHTML,
 		ReplyMarkup: kb,
 	})

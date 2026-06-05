@@ -5,7 +5,7 @@ import (
 	"html"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
+	"oksana-vpn-telegram-bot/pkg/api"
 	"strings"
 	"testing"
 	"time"
@@ -267,18 +267,40 @@ func TestHandleVlessCommandShowsMenuWhenAccessIsAvailable(t *testing.T) {
 	}
 }
 
-func TestBuildVlessLinkMessageUsesEncryptedURLInDeepLinks(t *testing.T) {
-	link := "https://domain.com/connect?tg=encrypted%3Dvalue&i=second%3Dvalue"
-	message := buildVlessLinkMessage(link)
-	encoded := url.QueryEscape(link)
+func TestBuildVlessLinkMessageUsesHappDeepLinkWhenPresent(t *testing.T) {
+	linkResponse := api.VlessSubscriptionLinkResponse{
+		Link:         "https://domain.com/connect?tg=encrypted%3Dvalue&i=second%3Dvalue",
+		HappDeepLink: "happ://add-subscription?url=https%3A%2F%2Fbackend.example%2Fwrapped",
+	}
+	message := buildVlessLinkMessage(linkResponse)
 
-	if !strings.Contains(message, "href=\"happ://add-subscription?url="+encoded+"\"") {
+	if !strings.Contains(message, "href=\""+html.EscapeString(linkResponse.HappDeepLink)+"\"") {
 		t.Fatalf("expected Happ link in message, got %q", message)
 	}
-	if !strings.Contains(message, "href=\"v2raytun://install-sub?url="+encoded+"\"") {
+	if !strings.Contains(message, "<code>"+html.EscapeString(linkResponse.Link)+"</code>") {
+		t.Fatalf("expected original link in code block, got %q", message)
+	}
+}
+
+func TestBuildVlessLinkMessageUsesV2RayTunDeepLinkWhenPresent(t *testing.T) {
+	linkResponse := api.VlessSubscriptionLinkResponse{
+		Link:             "https://domain.com/connect?tg=encrypted%3Dvalue&i=second%3Dvalue",
+		V2RayTunDeepLink: "v2raytun://install-sub?url=https%3A%2F%2Fbackend.example%2Fwrapped",
+	}
+	message := buildVlessLinkMessage(linkResponse)
+
+	if !strings.Contains(message, "href=\""+html.EscapeString(linkResponse.V2RayTunDeepLink)+"\"") {
 		t.Fatalf("expected V2RayTun link in message, got %q", message)
 	}
-	if !strings.Contains(message, "<code>"+html.EscapeString(link)+"</code>") {
-		t.Fatalf("expected original encrypted link in code block, got %q", message)
+}
+
+func TestBuildVlessLinkMessageFallsBackToBaseLinkWhenDeepLinksMissing(t *testing.T) {
+	linkResponse := api.VlessSubscriptionLinkResponse{
+		Link: "https://domain.com/connect?tg=encrypted%3Dvalue&i=second%3Dvalue",
+	}
+	message := buildVlessLinkMessage(linkResponse)
+
+	if !strings.Contains(message, "href=\""+html.EscapeString(linkResponse.Link)+"\"") {
+		t.Fatalf("expected base link fallback in message, got %q", message)
 	}
 }
