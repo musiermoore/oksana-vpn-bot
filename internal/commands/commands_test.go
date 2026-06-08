@@ -178,6 +178,93 @@ func TestShowStartMenuForRegisteredUserSkipsRegistration(t *testing.T) {
 	}
 }
 
+func TestHandleHelpCommandShowsHelpSectionsMenu(t *testing.T) {
+	ctx := newTestContext()
+
+	if err := HandleHelpCommand(ctx); err != nil {
+		t.Fatalf("HandleHelpCommand returned error: %v", err)
+	}
+
+	if len(ctx.sent) != 1 {
+		t.Fatalf("expected 1 sent message, got %d", len(ctx.sent))
+	}
+	if ctx.sent[0] != "Выберите раздел помощи:" {
+		t.Fatalf("unexpected help message: %q", ctx.sent[0])
+	}
+}
+
+func TestGetHelpMenuKeyboardContainsExpectedButtons(t *testing.T) {
+	kb := getHelpMenuKeyboard()
+
+	if len(kb.InlineKeyboard) != 3 {
+		t.Fatalf("expected 3 rows, got %d", len(kb.InlineKeyboard))
+	}
+
+	if kb.InlineKeyboard[0][0].Text != "WG" || kb.InlineKeyboard[0][0].Unique != "help|wg" {
+		t.Fatalf("unexpected WG button: %#v", kb.InlineKeyboard[0][0])
+	}
+	if kb.InlineKeyboard[0][1].Text != "VLESS" || kb.InlineKeyboard[0][1].Unique != "help|vless" {
+		t.Fatalf("unexpected VLESS button: %#v", kb.InlineKeyboard[0][1])
+	}
+	if kb.InlineKeyboard[1][0].Text != "Клиенты" || kb.InlineKeyboard[1][0].Unique != "help|clients" {
+		t.Fatalf("unexpected clients button: %#v", kb.InlineKeyboard[1][0])
+	}
+}
+
+func TestGetHelpClientsKeyboardContainsLinks(t *testing.T) {
+	kb := getHelpClientsKeyboard()
+
+	if len(kb.InlineKeyboard) != 9 {
+		t.Fatalf("expected 9 rows, got %d", len(kb.InlineKeyboard))
+	}
+
+	if kb.InlineKeyboard[0][0].URL != "https://apps.apple.com/us/app/amneziavpn/id1600529900" {
+		t.Fatalf("unexpected Amnezia iOS link: %#v", kb.InlineKeyboard[0][0])
+	}
+	if kb.InlineKeyboard[0][1].URL != "https://play.google.com/store/apps/details?id=org.amnezia.awg" {
+		t.Fatalf("unexpected Amnezia Android link: %#v", kb.InlineKeyboard[0][1])
+	}
+	if kb.InlineKeyboard[1][0].URL != "https://amnezia.org/ru/downloads" {
+		t.Fatalf("unexpected AmneziaWG PC link: %#v", kb.InlineKeyboard[0][1])
+	}
+	if kb.InlineKeyboard[2][0].URL != "https://apps.apple.com/us/app/v2raytun/id6476628951" {
+		t.Fatalf("unexpected v2raytun iOS link: %#v", kb.InlineKeyboard[1][0])
+	}
+	if kb.InlineKeyboard[2][1].URL != "https://play.google.com/store/apps/details?id=com.v2raytun.android" {
+		t.Fatalf("unexpected v2raytun Android link: %#v", kb.InlineKeyboard[1][1])
+	}
+	if kb.InlineKeyboard[3][0].URL != "https://v2raytun.com/#download" {
+		t.Fatalf("unexpected v2raytun PC link: %#v", kb.InlineKeyboard[1][1])
+	}
+	if kb.InlineKeyboard[4][0].URL != "https://play.google.com/store/apps/details?id=com.happproxy" {
+		t.Fatalf("unexpected Happ Android link: %#v", kb.InlineKeyboard[2][0])
+	}
+	if kb.InlineKeyboard[4][1].URL != "https://apps.apple.com/us/app/happ-proxy-utility/id6504287215" {
+		t.Fatalf("unexpected Happ iOS link: %#v", kb.InlineKeyboard[2][1])
+	}
+	if kb.InlineKeyboard[5][0].URL != "https://www.happ.su/main/ru" {
+		t.Fatalf("unexpected Happ PC link: %#v", kb.InlineKeyboard[2][1])
+	}
+	if kb.InlineKeyboard[6][0].URL != "https://amnezia.org/ru/downloads" {
+		t.Fatalf("unexpected Amnezia site link: %#v", kb.InlineKeyboard[6][0])
+	}
+	if kb.InlineKeyboard[6][1].URL != "https://v2raytun.com/#download" {
+		t.Fatalf("unexpected v2raytun site link: %#v", kb.InlineKeyboard[6][1])
+	}
+	if kb.InlineKeyboard[7][0].URL != "https://www.happ.su/main/ru" {
+		t.Fatalf("unexpected Happ site link: %#v", kb.InlineKeyboard[7][0])
+	}
+}
+
+func TestHelpTextsLoadedFromFiles(t *testing.T) {
+	if !strings.Contains(getHelpWGMessage(), "Настройка WG") {
+		t.Fatalf("unexpected WG help text: %q", getHelpWGMessage())
+	}
+	if !strings.Contains(getHelpVLESSMessage(), "Настройка VLESS") {
+		t.Fatalf("unexpected VLESS help text: %q", getHelpVLESSMessage())
+	}
+}
+
 func TestHandleBalanceWithWrappedAPIResponses(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

@@ -1,16 +1,19 @@
 package commands
 
 import (
-	"bytes"
+	_ "embed"
 	"fmt"
 	"oksana-vpn-telegram-bot/pkg/api"
-	"oksana-vpn-telegram-bot/pkg/utils"
-	"os"
-	"path/filepath"
 	"strings"
 
 	telebot "gopkg.in/telebot.v4"
 )
+
+//go:embed help_wg.txt
+var helpWGText string
+
+//go:embed help_vless.txt
+var helpVLESSText string
 
 func getMainMenu() *telebot.ReplyMarkup {
 	menu := &telebot.ReplyMarkup{}
@@ -117,68 +120,97 @@ func HandleRegisterCommand(c telebot.Context) error {
 	return showStartMenu(c)
 }
 
-func getHelpData() (*telebot.ReplyMarkup, string) {
+func getHelpMenuKeyboard() *telebot.ReplyMarkup {
 	kb := &telebot.ReplyMarkup{}
 
+	btnWG := kb.Data("WG", "help|wg")
+	btnVLESS := kb.Data("VLESS", "help|vless")
+	btnClients := kb.Data("Клиенты", "help|clients")
 	btnToStart := kb.Data("К началу", "to_start")
-	kb.Inline(kb.Row(btnToStart))
+	kb.Inline(
+		kb.Row(btnWG, btnVLESS),
+		kb.Row(btnClients),
+		kb.Row(btnToStart),
+	)
 
-	help := strings.ReplaceAll(`
-Впн будет через WireGuard, поэтому качайте на пк и/или телефон
-
-Настройка для пк/телефона:
-1. Скачиваете конфиг через кнопки в боте
-2. Нажимаете плюсик
-3. Выбираете загрузку файл
-4. Жмете подключиться
-
-Настройка для телефона: такая же, за исключением, что можно через QR код
-
-Один конфиг можно ДОБАВИТЬ на оба устройства, но ИСПОЛЬЗОВАТЬ *одновременно* их нельзя. Если подключиться к VPN с 2 и более устройств, используя один конфиг, то работать не будет. 
-
-*Одновременно, 1 конфиг = 1 устройство*
-
-———
-
-Качать отсюда: https://www.wireguard.com/install/
-
-Там на все устройства есть ссылки
-
-Для тех, у кого не работает, версия с усиленной маскировкой - AmneziaWG в Play Market или по ссылке https://docs.amnezia.org/ru/documentation/amnezia-wg/ (внизу страницы)
-`, "\\'", "`")
-
-	help = utils.EscapeMarkdownV2(help)
-
-	return kb, help
+	return kb
 }
 
-func sendHelpPhoto(c telebot.Context) error {
-	kb, message := getHelpData()
+func getHelpDetailsKeyboard() *telebot.ReplyMarkup {
+	kb := &telebot.ReplyMarkup{}
 
-	wd, _ := os.Getwd()
-	photoPath := filepath.Join(wd, "internal", "images", "help.jpg")
-	data, err := os.ReadFile(photoPath)
-	if err != nil {
-		return c.Send("Cannot read image file: " + err.Error())
-	}
+	btnBack := kb.Data("Назад", "help|menu")
+	btnToStart := kb.Data("К началу", "to_start")
+	kb.Inline(kb.Row(btnBack, btnToStart))
 
-	photo := &telebot.Photo{
-		File: telebot.File{
-			FileReader: bytes.NewReader(data),
-		},
-		Caption: message,
-	}
+	return kb
+}
 
-	return c.Send(photo, &telebot.SendOptions{
-		ParseMode:   telebot.ModeMarkdownV2,
-		ReplyMarkup: kb,
-	})
+func getHelpClientsKeyboard() *telebot.ReplyMarkup {
+	kb := &telebot.ReplyMarkup{}
+
+	btnAmneziaWGIOS := kb.URL("Amnezia iOS", "https://apps.apple.com/us/app/amneziavpn/id1600529900")
+	btnAmneziaWGAndroid := kb.URL("Amnezia Android", "https://play.google.com/store/apps/details?id=org.amnezia.awg")
+	btnAmneziaWGPC := kb.URL("Amnezia ПК", "https://amnezia.org/ru/downloads")
+	btnV2RayTunIOS := kb.URL("v2raytun iOS", "https://apps.apple.com/us/app/v2raytun/id6476628951")
+	btnV2RayTunAndroid := kb.URL("v2raytun Android", "https://play.google.com/store/apps/details?id=com.v2raytun.android")
+	btnV2RayTunPC := kb.URL("v2raytun ПК", "https://v2raytun.com/#download")
+	btnHappAndroid := kb.URL("Happ Android", "https://play.google.com/store/apps/details?id=com.happproxy")
+	btnHappIOS := kb.URL("Happ iOS", "https://apps.apple.com/us/app/happ-proxy-utility/id6504287215")
+	btnHappPC := kb.URL("Happ ПК", "https://www.happ.su/main/ru")
+	btnAmneziaSite := kb.URL("Сайт Amnezia", "https://amnezia.org/ru/downloads")
+	btnV2RayTunSite := kb.URL("Сайт v2raytun", "https://v2raytun.com/#download")
+	btnHappSite := kb.URL("Сайт Happ", "https://www.happ.su/main/ru")
+	btnBack := kb.Data("Назад", "help|menu")
+	btnToStart := kb.Data("К началу", "to_start")
+
+	kb.Inline(
+		kb.Row(btnAmneziaWGIOS, btnAmneziaWGAndroid),
+		kb.Row(btnAmneziaWGPC),
+		kb.Row(btnV2RayTunIOS, btnV2RayTunAndroid),
+		kb.Row(btnV2RayTunPC),
+		kb.Row(btnHappAndroid, btnHappIOS),
+		kb.Row(btnHappPC),
+		kb.Row(btnAmneziaSite, btnV2RayTunSite),
+		kb.Row(btnHappSite),
+		kb.Row(btnBack, btnToStart),
+	)
+
+	return kb
+}
+
+func getHelpWGMessage() string {
+	return strings.TrimSpace(helpWGText)
+}
+
+func getHelpVLESSMessage() string {
+	return strings.TrimSpace(helpVLESSText)
+}
+
+func sendHelpMenu(c telebot.Context) error {
+	return c.Send("Выберите раздел помощи:", getHelpMenuKeyboard())
+}
+
+func HandleHelpMenu(c telebot.Context) error {
+	return sendHelpMenu(c)
+}
+
+func HandleHelpWG(c telebot.Context) error {
+	return c.Send(getHelpWGMessage(), getHelpDetailsKeyboard())
+}
+
+func HandleHelpVLESS(c telebot.Context) error {
+	return c.Send(getHelpVLESSMessage(), getHelpDetailsKeyboard())
+}
+
+func HandleHelpClients(c telebot.Context) error {
+	return c.Send("Выберите клиент. Если не нашли свою платформу, откройте официальный сайт ниже.", getHelpClientsKeyboard())
 }
 
 func HandleHelpCommand(c telebot.Context) error {
-	return sendHelpPhoto(c)
+	return sendHelpMenu(c)
 }
 
 func HandleHelpButton(c telebot.Context) error {
-	return sendHelpPhoto(c)
+	return sendHelpMenu(c)
 }

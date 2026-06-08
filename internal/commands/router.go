@@ -38,6 +38,14 @@ func RegisterCommands(bot *telebot.Bot) {
 			return HandleChoosingConfig(c)
 		case data == "to_start":
 			return showStartMenu(c)
+		case data == "help|menu":
+			return HandleHelpMenu(c)
+		case data == "help|wg":
+			return HandleHelpWG(c)
+		case data == "help|vless":
+			return HandleHelpVLESS(c)
+		case data == "help|clients":
+			return HandleHelpClients(c)
 		case data == "to_wireguard_configs":
 			return HandleWireguardConfigsButton(c)
 		case data == "to_vless":
