@@ -146,32 +146,64 @@ func getHelpDetailsKeyboard() *telebot.ReplyMarkup {
 	return kb
 }
 
-func getHelpClientsKeyboard() *telebot.ReplyMarkup {
+func getHelpClientsMenuKeyboard() *telebot.ReplyMarkup {
+	kb := &telebot.ReplyMarkup{}
+
+	btnWGClients := kb.Data("WG клиенты", "help|clients|wg")
+	btnVLESSClients := kb.Data("VLESS клиенты", "help|clients|vless")
+	btnBack := kb.Data("Назад", "help|menu")
+	btnToStart := kb.Data("К началу", "to_start")
+
+	kb.Inline(
+		kb.Row(btnWGClients),
+		kb.Row(btnVLESSClients),
+		kb.Row(btnBack, btnToStart),
+	)
+
+	return kb
+}
+
+func getHelpWGClientsKeyboard() *telebot.ReplyMarkup {
 	kb := &telebot.ReplyMarkup{}
 
 	btnAmneziaWGIOS := kb.URL("Amnezia iOS", "https://apps.apple.com/us/app/amneziavpn/id1600529900")
 	btnAmneziaWGAndroid := kb.URL("Amnezia Android", "https://play.google.com/store/apps/details?id=org.amnezia.awg")
 	btnAmneziaWGPC := kb.URL("Amnezia ПК", "https://amnezia.org/ru/downloads")
-	btnV2RayTunIOS := kb.URL("v2raytun iOS", "https://apps.apple.com/us/app/v2raytun/id6476628951")
-	btnV2RayTunAndroid := kb.URL("v2raytun Android", "https://play.google.com/store/apps/details?id=com.v2raytun.android")
-	btnV2RayTunPC := kb.URL("Сайт v2raytun", "https://v2raytun.com/#download")
-	btnHappAndroid := kb.URL("Happ Android", "https://play.google.com/store/apps/details?id=com.happproxy")
-	btnHappIOS := kb.URL("Happ iOS", "https://apps.apple.com/us/app/happ-proxy-utility/id6504287215")
-	btnHappPC := kb.URL("Сайт Happ", "https://www.happ.su/main/ru")
+	btnWireGuardIOS := kb.URL("WireGuard iOS", "https://apps.apple.com/us/app/wireguard/id1441195209")
+	btnWireGuardAndroid := kb.URL("WireGuard Android", "https://play.google.com/store/apps/details?id=com.wireguard.android&hl=ru")
+	btnWireGuardSite := kb.URL("Сайт WireGuard", "https://www.wireguard.com/")
 	btnAmneziaSite := kb.URL("Сайт Amnezia", "https://amnezia.org/ru/downloads")
-	btnV2RayTunSite := kb.URL("Сайт v2raytun", "https://v2raytun.com/#download")
-	btnHappSite := kb.URL("Сайт Happ", "https://www.happ.su/main/ru")
-	btnBack := kb.Data("Назад", "help|menu")
+	btnBack := kb.Data("Назад", "help|clients")
 	btnToStart := kb.Data("К началу", "to_start")
 
 	kb.Inline(
 		kb.Row(btnAmneziaWGIOS, btnAmneziaWGAndroid),
 		kb.Row(btnAmneziaWGPC),
+		kb.Row(btnWireGuardIOS, btnWireGuardAndroid),
+		kb.Row(btnWireGuardSite),
+		kb.Row(btnAmneziaSite),
+		kb.Row(btnBack, btnToStart),
+	)
+
+	return kb
+}
+
+func getHelpVLESSClientsKeyboard() *telebot.ReplyMarkup {
+	kb := &telebot.ReplyMarkup{}
+
+	btnV2RayTunIOS := kb.URL("v2raytun iOS", "https://apps.apple.com/us/app/v2raytun/id6476628951")
+	btnV2RayTunAndroid := kb.URL("v2raytun Android", "https://play.google.com/store/apps/details?id=com.v2raytun.android")
+	btnV2RayTunSite := kb.URL("Сайт v2raytun", "https://v2raytun.com/#download")
+	btnHappAndroid := kb.URL("Happ Android", "https://play.google.com/store/apps/details?id=com.happproxy")
+	btnHappIOS := kb.URL("Happ iOS", "https://apps.apple.com/us/app/happ-proxy-utility/id6504287215")
+	btnHappSite := kb.URL("Сайт Happ", "https://www.happ.su/main/ru")
+	btnBack := kb.Data("Назад", "help|clients")
+	btnToStart := kb.Data("К началу", "to_start")
+
+	kb.Inline(
 		kb.Row(btnV2RayTunIOS, btnV2RayTunAndroid),
-		kb.Row(btnV2RayTunPC),
+		kb.Row(btnV2RayTunSite),
 		kb.Row(btnHappAndroid, btnHappIOS),
-		kb.Row(btnHappPC),
-		kb.Row(btnAmneziaSite, btnV2RayTunSite),
 		kb.Row(btnHappSite),
 		kb.Row(btnBack, btnToStart),
 	)
@@ -204,7 +236,15 @@ func HandleHelpVLESS(c telebot.Context) error {
 }
 
 func HandleHelpClients(c telebot.Context) error {
-	return c.Send("Выберите клиент. Если не нашли свою платформу, откройте официальный сайт ниже.", getHelpClientsKeyboard())
+	return c.Send("Выберите тип клиента:", getHelpClientsMenuKeyboard())
+}
+
+func HandleHelpWGClients(c telebot.Context) error {
+	return c.Send("WG клиенты. Если не нашли свою платформу, откройте официальный сайт ниже.", getHelpWGClientsKeyboard())
+}
+
+func HandleHelpVLESSClients(c telebot.Context) error {
+	return c.Send("VLESS клиенты. Если не нашли свою платформу, откройте официальный сайт ниже.", getHelpVLESSClientsKeyboard())
 }
 
 func HandleHelpCommand(c telebot.Context) error {

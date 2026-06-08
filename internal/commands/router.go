@@ -46,6 +46,10 @@ func RegisterCommands(bot *telebot.Bot) {
 			return HandleHelpVLESS(c)
 		case data == "help|clients":
 			return HandleHelpClients(c)
+		case data == "help|clients|wg":
+			return HandleHelpWGClients(c)
+		case data == "help|clients|vless":
+			return HandleHelpVLESSClients(c)
 		case data == "to_wireguard_configs":
 			return HandleWireguardConfigsButton(c)
 		case data == "to_vless":

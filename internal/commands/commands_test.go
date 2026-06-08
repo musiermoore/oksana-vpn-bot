@@ -211,11 +211,26 @@ func TestGetHelpMenuKeyboardContainsExpectedButtons(t *testing.T) {
 	}
 }
 
-func TestGetHelpClientsKeyboardContainsLinks(t *testing.T) {
-	kb := getHelpClientsKeyboard()
+func TestGetHelpClientsMenuKeyboardContainsExpectedButtons(t *testing.T) {
+	kb := getHelpClientsMenuKeyboard()
 
-	if len(kb.InlineKeyboard) != 9 {
-		t.Fatalf("expected 9 rows, got %d", len(kb.InlineKeyboard))
+	if len(kb.InlineKeyboard) != 3 {
+		t.Fatalf("expected 3 rows, got %d", len(kb.InlineKeyboard))
+	}
+
+	if kb.InlineKeyboard[0][0].Text != "WG клиенты" || kb.InlineKeyboard[0][0].Unique != "help|clients|wg" {
+		t.Fatalf("unexpected WG clients button: %#v", kb.InlineKeyboard[0][0])
+	}
+	if kb.InlineKeyboard[1][0].Text != "VLESS клиенты" || kb.InlineKeyboard[1][0].Unique != "help|clients|vless" {
+		t.Fatalf("unexpected VLESS clients button: %#v", kb.InlineKeyboard[1][0])
+	}
+}
+
+func TestGetHelpWGClientsKeyboardContainsLinks(t *testing.T) {
+	kb := getHelpWGClientsKeyboard()
+
+	if len(kb.InlineKeyboard) != 6 {
+		t.Fatalf("expected 6 rows, got %d", len(kb.InlineKeyboard))
 	}
 
 	if kb.InlineKeyboard[0][0].URL != "https://apps.apple.com/us/app/amneziavpn/id1600529900" {
@@ -227,32 +242,44 @@ func TestGetHelpClientsKeyboardContainsLinks(t *testing.T) {
 	if kb.InlineKeyboard[1][0].URL != "https://amnezia.org/ru/downloads" {
 		t.Fatalf("unexpected AmneziaWG PC link: %#v", kb.InlineKeyboard[0][1])
 	}
-	if kb.InlineKeyboard[2][0].URL != "https://apps.apple.com/us/app/v2raytun/id6476628951" {
-		t.Fatalf("unexpected v2raytun iOS link: %#v", kb.InlineKeyboard[1][0])
+	if kb.InlineKeyboard[2][0].URL != "https://apps.apple.com/us/app/wireguard/id1441195209" {
+		t.Fatalf("unexpected WireGuard iOS link: %#v", kb.InlineKeyboard[2][0])
 	}
-	if kb.InlineKeyboard[2][1].URL != "https://play.google.com/store/apps/details?id=com.v2raytun.android" {
-		t.Fatalf("unexpected v2raytun Android link: %#v", kb.InlineKeyboard[1][1])
+	if kb.InlineKeyboard[2][1].URL != "https://play.google.com/store/apps/details?id=com.wireguard.android&hl=ru" {
+		t.Fatalf("unexpected WireGuard Android link: %#v", kb.InlineKeyboard[2][1])
 	}
-	if kb.InlineKeyboard[3][0].URL != "https://v2raytun.com/#download" {
-		t.Fatalf("unexpected v2raytun PC link: %#v", kb.InlineKeyboard[1][1])
+	if kb.InlineKeyboard[3][0].URL != "https://www.wireguard.com/" {
+		t.Fatalf("unexpected WireGuard site link: %#v", kb.InlineKeyboard[3][0])
 	}
-	if kb.InlineKeyboard[4][0].URL != "https://play.google.com/store/apps/details?id=com.happproxy" {
+	if kb.InlineKeyboard[4][0].URL != "https://amnezia.org/ru/downloads" {
+		t.Fatalf("unexpected Amnezia site link: %#v", kb.InlineKeyboard[4][0])
+	}
+}
+
+func TestGetHelpVLESSClientsKeyboardContainsLinks(t *testing.T) {
+	kb := getHelpVLESSClientsKeyboard()
+
+	if len(kb.InlineKeyboard) != 5 {
+		t.Fatalf("expected 5 rows, got %d", len(kb.InlineKeyboard))
+	}
+
+	if kb.InlineKeyboard[0][0].URL != "https://apps.apple.com/us/app/v2raytun/id6476628951" {
+		t.Fatalf("unexpected v2raytun iOS link: %#v", kb.InlineKeyboard[0][0])
+	}
+	if kb.InlineKeyboard[0][1].URL != "https://play.google.com/store/apps/details?id=com.v2raytun.android" {
+		t.Fatalf("unexpected v2raytun Android link: %#v", kb.InlineKeyboard[0][1])
+	}
+	if kb.InlineKeyboard[1][0].URL != "https://v2raytun.com/#download" {
+		t.Fatalf("unexpected v2raytun site link: %#v", kb.InlineKeyboard[1][0])
+	}
+	if kb.InlineKeyboard[2][0].URL != "https://play.google.com/store/apps/details?id=com.happproxy" {
 		t.Fatalf("unexpected Happ Android link: %#v", kb.InlineKeyboard[2][0])
 	}
-	if kb.InlineKeyboard[4][1].URL != "https://apps.apple.com/us/app/happ-proxy-utility/id6504287215" {
+	if kb.InlineKeyboard[2][1].URL != "https://apps.apple.com/us/app/happ-proxy-utility/id6504287215" {
 		t.Fatalf("unexpected Happ iOS link: %#v", kb.InlineKeyboard[2][1])
 	}
-	if kb.InlineKeyboard[5][0].URL != "https://www.happ.su/main/ru" {
-		t.Fatalf("unexpected Happ PC link: %#v", kb.InlineKeyboard[2][1])
-	}
-	if kb.InlineKeyboard[6][0].URL != "https://amnezia.org/ru/downloads" {
-		t.Fatalf("unexpected Amnezia site link: %#v", kb.InlineKeyboard[6][0])
-	}
-	if kb.InlineKeyboard[6][1].URL != "https://v2raytun.com/#download" {
-		t.Fatalf("unexpected v2raytun site link: %#v", kb.InlineKeyboard[6][1])
-	}
-	if kb.InlineKeyboard[7][0].URL != "https://www.happ.su/main/ru" {
-		t.Fatalf("unexpected Happ site link: %#v", kb.InlineKeyboard[7][0])
+	if kb.InlineKeyboard[3][0].URL != "https://www.happ.su/main/ru" {
+		t.Fatalf("unexpected Happ site link: %#v", kb.InlineKeyboard[3][0])
 	}
 }
 
