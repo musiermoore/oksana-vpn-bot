@@ -136,12 +136,30 @@ func getHelpMenuKeyboard() *telebot.ReplyMarkup {
 	return kb
 }
 
-func getHelpDetailsKeyboard() *telebot.ReplyMarkup {
+func getHelpWGDetailsKeyboard() *telebot.ReplyMarkup {
 	kb := &telebot.ReplyMarkup{}
 
+	btnClients := kb.Data("WG клиенты", "help|clients|wg")
 	btnBack := kb.Data("Назад", "help|menu")
 	btnToStart := kb.Data("К началу", "to_start")
-	kb.Inline(kb.Row(btnBack, btnToStart))
+	kb.Inline(
+		kb.Row(btnClients),
+		kb.Row(btnBack, btnToStart),
+	)
+
+	return kb
+}
+
+func getHelpVLESSDetailsKeyboard() *telebot.ReplyMarkup {
+	kb := &telebot.ReplyMarkup{}
+
+	btnClients := kb.Data("VLESS клиенты", "help|clients|vless")
+	btnBack := kb.Data("Назад", "help|menu")
+	btnToStart := kb.Data("К началу", "to_start")
+	kb.Inline(
+		kb.Row(btnClients),
+		kb.Row(btnBack, btnToStart),
+	)
 
 	return kb
 }
@@ -168,11 +186,10 @@ func getHelpWGClientsKeyboard() *telebot.ReplyMarkup {
 
 	btnAmneziaWGIOS := kb.URL("Amnezia iOS", "https://apps.apple.com/us/app/amneziavpn/id1600529900")
 	btnAmneziaWGAndroid := kb.URL("Amnezia Android", "https://play.google.com/store/apps/details?id=org.amnezia.awg")
-	btnAmneziaWGPC := kb.URL("Amnezia ПК", "https://amnezia.org/ru/downloads")
+	btnAmneziaWGPC := kb.URL("Сайт Amnezia", "https://amnezia.org/ru/downloads")
 	btnWireGuardIOS := kb.URL("WireGuard iOS", "https://apps.apple.com/us/app/wireguard/id1441195209")
 	btnWireGuardAndroid := kb.URL("WireGuard Android", "https://play.google.com/store/apps/details?id=com.wireguard.android&hl=ru")
 	btnWireGuardSite := kb.URL("Сайт WireGuard", "https://www.wireguard.com/")
-	btnAmneziaSite := kb.URL("Сайт Amnezia", "https://amnezia.org/ru/downloads")
 	btnBack := kb.Data("Назад", "help|clients")
 	btnToStart := kb.Data("К началу", "to_start")
 
@@ -181,7 +198,6 @@ func getHelpWGClientsKeyboard() *telebot.ReplyMarkup {
 		kb.Row(btnAmneziaWGPC),
 		kb.Row(btnWireGuardIOS, btnWireGuardAndroid),
 		kb.Row(btnWireGuardSite),
-		kb.Row(btnAmneziaSite),
 		kb.Row(btnBack, btnToStart),
 	)
 
@@ -228,11 +244,11 @@ func HandleHelpMenu(c telebot.Context) error {
 }
 
 func HandleHelpWG(c telebot.Context) error {
-	return c.Send(getHelpWGMessage(), getHelpDetailsKeyboard())
+	return c.Send(getHelpWGMessage(), getHelpWGDetailsKeyboard())
 }
 
 func HandleHelpVLESS(c telebot.Context) error {
-	return c.Send(getHelpVLESSMessage(), getHelpDetailsKeyboard())
+	return c.Send(getHelpVLESSMessage(), getHelpVLESSDetailsKeyboard())
 }
 
 func HandleHelpClients(c telebot.Context) error {

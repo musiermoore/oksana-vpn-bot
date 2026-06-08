@@ -211,6 +211,28 @@ func TestGetHelpMenuKeyboardContainsExpectedButtons(t *testing.T) {
 	}
 }
 
+func TestGetHelpWGDetailsKeyboardContainsClientsShortcut(t *testing.T) {
+	kb := getHelpWGDetailsKeyboard()
+
+	if len(kb.InlineKeyboard) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(kb.InlineKeyboard))
+	}
+	if kb.InlineKeyboard[0][0].Text != "WG клиенты" || kb.InlineKeyboard[0][0].Unique != "help|clients|wg" {
+		t.Fatalf("unexpected WG clients shortcut: %#v", kb.InlineKeyboard[0][0])
+	}
+}
+
+func TestGetHelpVLESSDetailsKeyboardContainsClientsShortcut(t *testing.T) {
+	kb := getHelpVLESSDetailsKeyboard()
+
+	if len(kb.InlineKeyboard) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(kb.InlineKeyboard))
+	}
+	if kb.InlineKeyboard[0][0].Text != "VLESS клиенты" || kb.InlineKeyboard[0][0].Unique != "help|clients|vless" {
+		t.Fatalf("unexpected VLESS clients shortcut: %#v", kb.InlineKeyboard[0][0])
+	}
+}
+
 func TestGetHelpClientsMenuKeyboardContainsExpectedButtons(t *testing.T) {
 	kb := getHelpClientsMenuKeyboard()
 
@@ -229,8 +251,8 @@ func TestGetHelpClientsMenuKeyboardContainsExpectedButtons(t *testing.T) {
 func TestGetHelpWGClientsKeyboardContainsLinks(t *testing.T) {
 	kb := getHelpWGClientsKeyboard()
 
-	if len(kb.InlineKeyboard) != 6 {
-		t.Fatalf("expected 6 rows, got %d", len(kb.InlineKeyboard))
+	if len(kb.InlineKeyboard) != 5 {
+		t.Fatalf("expected 5 rows, got %d", len(kb.InlineKeyboard))
 	}
 
 	if kb.InlineKeyboard[0][0].URL != "https://apps.apple.com/us/app/amneziavpn/id1600529900" {
@@ -250,9 +272,6 @@ func TestGetHelpWGClientsKeyboardContainsLinks(t *testing.T) {
 	}
 	if kb.InlineKeyboard[3][0].URL != "https://www.wireguard.com/" {
 		t.Fatalf("unexpected WireGuard site link: %#v", kb.InlineKeyboard[3][0])
-	}
-	if kb.InlineKeyboard[4][0].URL != "https://amnezia.org/ru/downloads" {
-		t.Fatalf("unexpected Amnezia site link: %#v", kb.InlineKeyboard[4][0])
 	}
 }
 
