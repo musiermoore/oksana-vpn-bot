@@ -160,7 +160,7 @@ func TestSendPaymentRequestUsesMonthPayload(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"status":"deposit_required","message":"Для активации подписки нужно пополнить баланс на 520.","deposit_amount":520,"transaction_id":1}`))
+		_, _ = w.Write([]byte(`{"status":"deposit_required","message":"Для активации подписки нужно оплатить 520 RUB через YooKassa.","deposit_amount":520.0,"transaction_id":1,"invoice_id":456,"payment_id":"uuid","payment_status":"pending","confirmation_url":"https://pay.example/confirm"}`))
 	})
 
 	response, err := client.SendPaymentRequest(6, "tbank")
@@ -170,6 +170,9 @@ func TestSendPaymentRequestUsesMonthPayload(t *testing.T) {
 
 	if response.Status != "deposit_required" || response.DepositAmount != 520 || response.TransactionID != 1 {
 		t.Fatalf("unexpected payment response: %#v", response)
+	}
+	if response.InvoiceID != 456 || response.PaymentID != "uuid" || response.PaymentStatus != "pending" || response.ConfirmationURL != "https://pay.example/confirm" {
+		t.Fatalf("unexpected yookassa fields: %#v", response)
 	}
 }
 

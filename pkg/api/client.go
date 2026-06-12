@@ -326,8 +326,12 @@ func (c *Client) GetSubscriptionPackages() ([]SubscriptionPackage, error) {
 type PaymentResponse struct {
 	Status           string `json:"status"`
 	Message          string `json:"message"`
-	DepositAmount    int    `json:"deposit_amount"`
+	DepositAmount    float64
 	TransactionID    int    `json:"transaction_id"`
+	InvoiceID        int    `json:"invoice_id"`
+	PaymentID        string `json:"payment_id"`
+	PaymentStatus    string `json:"payment_status"`
+	ConfirmationURL  string `json:"confirmation_url"`
 	EndDate          string `json:"end_date"`
 	FormattedEndDate string `json:"formatted_end_date"`
 }
@@ -680,6 +684,33 @@ func parseOptionalInt32(raw json.RawMessage) (int32, error) {
 	return 0, fmt.Errorf("unsupported numeric value: %s", string(raw))
 }
 
+func parseOptionalFloat64(raw json.RawMessage) (float64, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0, nil
+	}
+
+	var floatValue float64
+	if err := json.Unmarshal(raw, &floatValue); err == nil {
+		return floatValue, nil
+	}
+
+	var stringValue string
+	if err := json.Unmarshal(raw, &stringValue); err == nil {
+		if strings.TrimSpace(stringValue) == "" {
+			return 0, nil
+		}
+
+		value, convErr := strconv.ParseFloat(stringValue, 64)
+		if convErr != nil {
+			return 0, convErr
+		}
+
+		return value, nil
+	}
+
+	return 0, fmt.Errorf("unsupported float value: %s", string(raw))
+}
+
 func unmarshalAPIData(body []byte, target any) error {
 	if len(body) == 0 {
 		return io.EOF
@@ -731,19 +762,48 @@ func parsePaymentResponse(body []byte) (PaymentResponse, error) {
 		return PaymentResponse{}, nil
 	}
 
-	var response PaymentResponse
+	var response struct {
+		Status           string          `json:"status"`
+		Message          string          `json:"message"`
+		DepositAmount    json.RawMessage `json:"deposit_amount"`
+		TransactionID    int             `json:"transaction_id"`
+		InvoiceID        int             `json:"invoice_id"`
+		PaymentID        string          `json:"payment_id"`
+		PaymentStatus    string          `json:"payment_status"`
+		ConfirmationURL  string          `json:"confirmation_url"`
+		EndDate          string          `json:"end_date"`
+		FormattedEndDate string          `json:"formatted_end_date"`
+	}
 	if err := unmarshalAPIData(body, &response); err != nil {
 		return PaymentResponse{}, err
 	}
 
-	if response.Message == "" {
+	depositAmount, err := parseOptionalFloat64(response.DepositAmount)
+	if err != nil {
+		return PaymentResponse{}, err
+	}
+
+	result := PaymentResponse{
+		Status:           response.Status,
+		Message:          response.Message,
+		DepositAmount:    depositAmount,
+		TransactionID:    response.TransactionID,
+		InvoiceID:        response.InvoiceID,
+		PaymentID:        response.PaymentID,
+		PaymentStatus:    response.PaymentStatus,
+		ConfirmationURL:  response.ConfirmationURL,
+		EndDate:          response.EndDate,
+		FormattedEndDate: response.FormattedEndDate,
+	}
+
+	if result.Message == "" {
 		message, err := parseAPIMessage(body)
 		if err == nil {
-			response.Message = message
+			result.Message = message
 		}
 	}
 
-	return response, nil
+	return result, nil
 }
 
 func parseConfigResponse(body []byte) (ConfigResponse, error) {

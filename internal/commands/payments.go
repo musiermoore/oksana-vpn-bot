@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"math"
 	"oksana-vpn-telegram-bot/pkg/api"
 	"oksana-vpn-telegram-bot/pkg/utils"
 	"strconv"
@@ -38,9 +39,8 @@ func HandleSubscription(c telebot.Context) error {
 *Долг:* %.2f
 %s
 
-Деньги отправлять на Т-Банк по номеру +79230399748
- 
-Если баланса не хватит для выбранного пакета, бот создаст запрос на доплату и после подтверждения платежа подписка активируется автоматически.
+Выбери пакет на 1, 3, 6 или 12 месяцев.
+Если баланса не хватит, я подготовлю оплату через YooKassa, а после успешного платежа подписка активируется автоматически.
 `
 	subscriptionString = fmt.Sprintf(subscriptionString, balance.Amount, balance.Debt, getSubscriptionDetails(status))
 	subscriptionString = utils.EscapeMarkdownV2(subscriptionString)
@@ -275,23 +275,23 @@ func buildSubscriptionPurchaseMessage(response api.PaymentResponse) string {
 	switch response.Status {
 	case "activated":
 		if message == "" && response.FormattedEndDate != "" {
-			message = fmt.Sprintf("Подписка активирована до %s.", response.FormattedEndDate)
+			message = fmt.Sprintf("Подписка уже активирована до %s.", response.FormattedEndDate)
 		}
 		if message == "" {
-			message = "Подписка активирована."
+			message = "Подписка успешно активирована."
 		}
-		return message + "\n\nПодписка уже активна и действует сразу."
+		return message + "\n\nНичего дополнительно оплачивать не нужно."
 	case "deposit_required":
 		if message == "" && response.DepositAmount > 0 {
-			message = fmt.Sprintf("Для активации подписки нужно пополнить баланс на %d.", response.DepositAmount)
+			message = fmt.Sprintf("Для активации подписки нужно оплатить %s RUB через YooKassa.", formatDepositAmount(response.DepositAmount))
 		}
 		if message == "" {
-			message = "Для активации подписки нужно пополнить баланс."
+			message = "Для активации подписки нужна оплата через YooKassa."
 		}
-		return message + "\n\nПосле подтверждения оплаты подписка активируется автоматически."
+		return message + "\n\nНажми кнопку ниже. После успешной оплаты подписка активируется автоматически."
 	default:
 		if message == "" {
-			return "Что-то пошло не так :("
+			return "Извини, сейчас не получилось обработать запрос. Попробуй чуть позже."
 		}
 		return message
 	}
@@ -300,13 +300,36 @@ func buildSubscriptionPurchaseMessage(response api.PaymentResponse) string {
 func submitSubscriptionPurchase(c telebot.Context, month int) error {
 	kb := &telebot.ReplyMarkup{}
 	btnToStart := kb.Data("К началу", "to_start")
-	kb.Inline(kb.Row(btnToStart))
 
 	client := api.NewClient(c)
 	response, err := client.SendPaymentRequest(month, "tbank")
 	if err != nil && api.IsMissingUserError(404, response.Message) {
+		kb.Inline(kb.Row(btnToStart))
 		return c.Send(missingUserMessage(), kb)
 	}
 
+	if err != nil {
+		kb.Inline(kb.Row(btnToStart))
+		return c.Send("Извини, сейчас не получилось создать оплату. Попробуй чуть позже.", kb)
+	}
+
+	if response.Status == "deposit_required" && response.ConfirmationURL != "" {
+		btnPay := telebot.Btn{Text: "Оплатить через YooKassa", URL: response.ConfirmationURL}
+		kb.Inline(
+			kb.Row(btnPay),
+			kb.Row(btnToStart),
+		)
+	} else {
+		kb.Inline(kb.Row(btnToStart))
+	}
+
 	return c.Send(buildSubscriptionPurchaseMessage(response), kb)
+}
+
+func formatDepositAmount(amount float64) string {
+	if math.Mod(amount, 1) == 0 {
+		return fmt.Sprintf("%.0f", amount)
+	}
+
+	return fmt.Sprintf("%.2f", amount)
 }

@@ -14,11 +14,12 @@ import (
 )
 
 type fakeContext struct {
-	sender *telebot.User
-	chat   *telebot.Chat
-	msg    *telebot.Message
-	cb     *telebot.Callback
-	sent   []string
+	sender       *telebot.User
+	chat         *telebot.Chat
+	msg          *telebot.Message
+	cb           *telebot.Callback
+	sent         []string
+	replyMarkups []*telebot.ReplyMarkup
 }
 
 func (f *fakeContext) Bot() telebot.API                                { return nil }
@@ -48,6 +49,17 @@ func (f *fakeContext) Entities() telebot.Entities                      { return 
 func (f *fakeContext) Data() string                                    { return "" }
 func (f *fakeContext) Args() []string                                  { return nil }
 func (f *fakeContext) Send(what interface{}, opts ...interface{}) error {
+	for _, opt := range opts {
+		switch value := opt.(type) {
+		case *telebot.ReplyMarkup:
+			f.replyMarkups = append(f.replyMarkups, value)
+		case *telebot.SendOptions:
+			if value != nil && value.ReplyMarkup != nil {
+				f.replyMarkups = append(f.replyMarkups, value.ReplyMarkup)
+			}
+		}
+	}
+
 	if text, ok := what.(string); ok {
 		f.sent = append(f.sent, text)
 		return nil
@@ -473,15 +485,15 @@ func TestHandleSubmitPaymentRequestActivatedMessage(t *testing.T) {
 	if !strings.Contains(ctx.sent[0], "Подписка активирована до 18.11.2026.") {
 		t.Fatalf("unexpected activation message: %q", ctx.sent[0])
 	}
-	if !strings.Contains(ctx.sent[0], "Подписка уже активна") {
-		t.Fatalf("expected immediate activation hint, got %q", ctx.sent[0])
+	if !strings.Contains(ctx.sent[0], "Ничего дополнительно оплачивать не нужно.") {
+		t.Fatalf("expected no-payment hint, got %q", ctx.sent[0])
 	}
 }
 
 func TestHandleSubmitPaymentRequestDepositRequiredMessage(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"status":"deposit_required","message":"Для активации подписки нужно пополнить баланс на 520.","deposit_amount":520,"transaction_id":1}`))
+		_, _ = w.Write([]byte(`{"status":"deposit_required","message":"Для активации подписки нужно оплатить 520 RUB через YooKassa.","deposit_amount":520.0,"transaction_id":1,"invoice_id":456,"payment_id":"uuid","payment_status":"pending","confirmation_url":"https://pay.example/confirm"}`))
 	}))
 	defer server.Close()
 
@@ -497,11 +509,23 @@ func TestHandleSubmitPaymentRequestDepositRequiredMessage(t *testing.T) {
 	if len(ctx.sent) != 1 {
 		t.Fatalf("expected 1 sent message, got %d", len(ctx.sent))
 	}
-	if !strings.Contains(ctx.sent[0], "Для активации подписки нужно пополнить баланс на 520.") {
+	if !strings.Contains(ctx.sent[0], "Для активации подписки нужно оплатить 520 RUB через YooKassa.") {
 		t.Fatalf("unexpected deposit-required message: %q", ctx.sent[0])
 	}
-	if !strings.Contains(ctx.sent[0], "подтверждения оплаты подписка активируется автоматически") {
+	if !strings.Contains(ctx.sent[0], "После успешной оплаты подписка активируется автоматически.") {
 		t.Fatalf("expected auto-activation explanation, got %q", ctx.sent[0])
+	}
+	if len(ctx.replyMarkups) != 1 {
+		t.Fatalf("expected reply markup, got %d", len(ctx.replyMarkups))
+	}
+	if len(ctx.replyMarkups[0].InlineKeyboard) == 0 || len(ctx.replyMarkups[0].InlineKeyboard[0]) == 0 {
+		t.Fatalf("expected payment button, got %#v", ctx.replyMarkups[0])
+	}
+	if ctx.replyMarkups[0].InlineKeyboard[0][0].Text != "Оплатить через YooKassa" {
+		t.Fatalf("unexpected payment button text: %#v", ctx.replyMarkups[0].InlineKeyboard[0][0])
+	}
+	if ctx.replyMarkups[0].InlineKeyboard[0][0].URL != "https://pay.example/confirm" {
+		t.Fatalf("unexpected payment button url: %#v", ctx.replyMarkups[0].InlineKeyboard[0][0])
 	}
 }
 
@@ -513,6 +537,17 @@ func TestBuildSubscriptionPurchaseMessageUsesFormattedEndDateFallback(t *testing
 
 	if !strings.Contains(message, "18.11.2026") {
 		t.Fatalf("expected formatted end date in message, got %q", message)
+	}
+}
+
+func TestBuildSubscriptionPurchaseMessageFormatsDepositAmount(t *testing.T) {
+	message := buildSubscriptionPurchaseMessage(api.PaymentResponse{
+		Status:        "deposit_required",
+		DepositAmount: 520,
+	})
+
+	if !strings.Contains(message, "520 RUB через YooKassa") {
+		t.Fatalf("expected formatted deposit amount in message, got %q", message)
 	}
 }
 
