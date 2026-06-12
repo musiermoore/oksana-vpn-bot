@@ -14,7 +14,7 @@ func RegisterCommands(bot *telebot.Bot) {
 	btnVless := menu.InlineKeyboard[0][1]
 	btnRegister := guestMenu.InlineKeyboard[0][0]
 	btnHelp := guestMenu.InlineKeyboard[0][1]
-	btnBalance := menu.InlineKeyboard[1][0]
+	btnSubscription := menu.InlineKeyboard[1][0]
 
 	bot.Handle("/start", func(c telebot.Context) error {
 		return showStartMenu(c)
@@ -24,10 +24,10 @@ func RegisterCommands(bot *telebot.Bot) {
 	bot.Handle(&btnVless, HandleVlessButton)
 	bot.Handle(&btnRegister, HandleRegisterCommand)
 	bot.Handle(&btnHelp, HandleHelpButton)
-	bot.Handle(&btnBalance, HandleBalance)
+	bot.Handle(&btnSubscription, HandleSubscription)
 
 	bot.Handle(telebot.OnCallback, func(c telebot.Context) error {
-		data := strings.TrimSpace(c.Callback().Data)
+		data := callbackData(c.Callback().Data)
 
 		switch {
 		case strings.HasPrefix(data, "action_config_"):

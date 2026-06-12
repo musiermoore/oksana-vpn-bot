@@ -10,7 +10,7 @@ import (
 	telebot "gopkg.in/telebot.v4"
 )
 
-func HandleBalance(c telebot.Context) error {
+func HandleSubscription(c telebot.Context) error {
 	kb := &telebot.ReplyMarkup{}
 
 	btnPayment := kb.Data("Купить подписку", "send_payment_request")
@@ -31,7 +31,9 @@ func HandleBalance(c telebot.Context) error {
 		return c.Send("Произошла ошибка. Попробуй чуть позже.")
 	}
 
-	balanceString := `
+	subscriptionString := `
+*Подписка и баланс*
+
 *Баланс:* %.2f
 *Долг:* %.2f
 %s
@@ -40,10 +42,10 @@ func HandleBalance(c telebot.Context) error {
  
 Если баланса не хватит для выбранного пакета, бот создаст запрос на доплату и после подтверждения платежа подписка активируется автоматически.
 `
-	balanceString = fmt.Sprintf(balanceString, balance.Amount, balance.Debt, getSubscriptionDetails(status))
-	balanceString = utils.EscapeMarkdownV2(balanceString)
+	subscriptionString = fmt.Sprintf(subscriptionString, balance.Amount, balance.Debt, getSubscriptionDetails(status))
+	subscriptionString = utils.EscapeMarkdownV2(subscriptionString)
 
-	return c.Send(balanceString, &telebot.SendOptions{
+	return c.Send(subscriptionString, &telebot.SendOptions{
 		ParseMode:   telebot.ModeMarkdownV2,
 		ReplyMarkup: kb,
 	})
@@ -67,7 +69,7 @@ func HandleSendPaymentRequest(c telebot.Context) error {
 }
 
 func HandleChooseSubscriptionPackage(c telebot.Context) error {
-	month, err := parseSubscriptionMonthCallback(c.Callback().Data, "choose_subscription_package|")
+	month, err := parseSubscriptionMonthCallback(callbackData(c.Callback().Data), "choose_subscription_package|")
 	if err != nil {
 		return c.Send("Неверный пакет подписки. Выбери один из доступных вариантов.", getRetrySubscriptionPackageKeyboard())
 	}
@@ -90,7 +92,7 @@ func HandleChooseSubscriptionPackage(c telebot.Context) error {
 }
 
 func HandleSubmitPaymentRequest(c telebot.Context) error {
-	data := strings.TrimSpace(c.Callback().Data)
+	data := callbackData(c.Callback().Data)
 
 	kb := &telebot.ReplyMarkup{}
 	btnToStart := kb.Data("К началу", "to_start")
@@ -114,7 +116,7 @@ func HandleSubmitPaymentRequest(c telebot.Context) error {
 }
 
 func HandleDepositAction(c telebot.Context) error {
-	data := strings.TrimSpace(c.Callback().Data)
+	data := callbackData(c.Callback().Data)
 	parts := strings.SplitN(data, "|", 2)
 	if len(parts) != 2 || parts[1] == "" {
 		_ = c.Respond(&telebot.CallbackResponse{})

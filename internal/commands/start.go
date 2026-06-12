@@ -20,12 +20,12 @@ func getMainMenu() *telebot.ReplyMarkup {
 
 	btnWgConfigs := menu.Data("WireGuard", "wireguard_menu_configs")
 	btnVless := menu.Data("VLESS", "vless_menu")
-	btnBalance := menu.Data("Баланс", "menu_balance")
+	btnSubscription := menu.Data("Подписка", "menu_subscription")
 	btnHelp := menu.Data("Помощь", "menu_help")
 
 	menu.Inline(
 		menu.Row(btnWgConfigs, btnVless),
-		menu.Row(btnBalance, btnHelp),
+		menu.Row(btnSubscription, btnHelp),
 	)
 
 	return menu
@@ -65,7 +65,7 @@ func getSubscriptionDetails(status api.RegistrationStatus) string {
 }
 
 func getStartMessage(status api.RegistrationStatus) string {
-	return "Привет! Выбери команду:" + getTopUpReminder(status)
+	return "Привет! Я помогу с подпиской и настройкой VPN.\n\nВыбери раздел:" + getTopUpReminder(status)
 }
 
 func ensureRegistered(c telebot.Context) (api.RegistrationStatus, error) {

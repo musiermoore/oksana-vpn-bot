@@ -24,8 +24,8 @@ func getConfigsKeyboard(c telebot.Context, configType string) (*telebot.ReplyMar
 			inline = append(inline, kb.Row(row))
 		}
 	} else if response.Type == "debt" {
-		btnBalance := kb.Data("Баланс", "menu_balance")
-		inline = append(inline, kb.Row(btnBalance))
+		btnSubscription := kb.Data("Подписка", "menu_subscription")
+		inline = append(inline, kb.Row(btnSubscription))
 	}
 
 	btnToStart := kb.Data("К началу", "to_start")
@@ -71,7 +71,7 @@ func HandleVlessConfigsButton(c telebot.Context) error {
 }
 
 func HandleChoosingConfig(c telebot.Context) error {
-	config := strings.TrimSpace(c.Callback().Data)
+	config := callbackData(c.Callback().Data)
 	parts := strings.Split(config, "|")
 
 	configType := parts[1]
@@ -102,7 +102,7 @@ func HandleChoosingConfig(c telebot.Context) error {
 }
 
 func prepareConfigData(c telebot.Context) string {
-	data := strings.TrimSpace(c.Callback().Data)
+	data := callbackData(c.Callback().Data)
 	return strings.Replace(data, "config|", "", 1)
 }
 

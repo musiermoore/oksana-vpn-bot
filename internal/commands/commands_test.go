@@ -147,7 +147,7 @@ func TestShowStartMenuRegistersMissingUser(t *testing.T) {
 	if len(ctx.sent) != 1 {
 		t.Fatalf("expected 1 sent message, got %d", len(ctx.sent))
 	}
-	if ctx.sent[0] != "Привет! Выбери команду:" {
+	if ctx.sent[0] != "Привет! Я помогу с подпиской и настройкой VPN.\n\nВыбери раздел:" {
 		t.Fatalf("unexpected start message: %q", ctx.sent[0])
 	}
 }
@@ -175,7 +175,7 @@ func TestShowStartMenuForRegisteredUserSkipsRegistration(t *testing.T) {
 	if calls != 1 {
 		t.Fatalf("expected 1 API call, got %d", calls)
 	}
-	if len(ctx.sent) != 1 || ctx.sent[0] != "Привет! Выбери команду:" {
+	if len(ctx.sent) != 1 || ctx.sent[0] != "Привет! Я помогу с подпиской и настройкой VPN.\n\nВыбери раздел:" {
 		t.Fatalf("unexpected messages: %#v", ctx.sent)
 	}
 }
@@ -313,7 +313,7 @@ func TestHelpTextsLoadedFromFiles(t *testing.T) {
 	}
 }
 
-func TestHandleBalanceWithWrappedAPIResponses(t *testing.T) {
+func TestHandleSubscriptionWithWrappedAPIResponses(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/users/777/balance":
@@ -332,8 +332,8 @@ func TestHandleBalanceWithWrappedAPIResponses(t *testing.T) {
 
 	ctx := newTestContext()
 
-	if err := HandleBalance(ctx); err != nil {
-		t.Fatalf("HandleBalance returned error: %v", err)
+	if err := HandleSubscription(ctx); err != nil {
+		t.Fatalf("HandleSubscription returned error: %v", err)
 	}
 
 	if len(ctx.sent) != 1 {
