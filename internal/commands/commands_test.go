@@ -350,20 +350,80 @@ func TestHandleBalanceWithWrappedAPIResponses(t *testing.T) {
 }
 
 func TestGetSubscriptionPackageKeyboardContainsExpectedButtons(t *testing.T) {
-	kb := getSubscriptionPackageKeyboard()
+	kb := getSubscriptionPackageKeyboard([]api.SubscriptionPackage{
+		{Month: 1, Price: 400, DiscountPercent: 0},
+		{Month: 3, Price: 1080, DiscountPercent: 10},
+		{Month: 6, Price: 1920, DiscountPercent: 20},
+		{Month: 12, Price: 3360, DiscountPercent: 30},
+	})
 
 	if len(kb.InlineKeyboard) != 3 {
 		t.Fatalf("expected 3 rows, got %d", len(kb.InlineKeyboard))
 	}
-	if kb.InlineKeyboard[0][0].Text != "1 месяц" || kb.InlineKeyboard[0][0].Unique != "choose_subscription_package|1" {
+	if kb.InlineKeyboard[0][0].Text != "1 месяц - 400 ₽" || kb.InlineKeyboard[0][0].Unique != "choose_subscription_package|1" {
 		t.Fatalf("unexpected first package button: %#v", kb.InlineKeyboard[0][0])
 	}
-	if kb.InlineKeyboard[1][1].Text != "12 месяцев" || kb.InlineKeyboard[1][1].Unique != "choose_subscription_package|12" {
+	if kb.InlineKeyboard[1][1].Text != "12 месяцев - 3360 ₽" || kb.InlineKeyboard[1][1].Unique != "choose_subscription_package|12" {
 		t.Fatalf("unexpected last package button: %#v", kb.InlineKeyboard[1][1])
 	}
 }
 
+func TestHandleSendPaymentRequestShowsBackendPrices(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/users/777/subscription-packages" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": [
+				{"month": 1, "price": 400, "discount_percent": 0},
+				{"month": 3, "price": 1080, "discount_percent": 10},
+				{"month": 6, "price": 1920, "discount_percent": 20},
+				{"month": 12, "price": 3360, "discount_percent": 30}
+			]
+		}`))
+	}))
+	defer server.Close()
+
+	setupAPIEnv(t, server)
+
+	ctx := newTestContext()
+	if err := HandleSendPaymentRequest(ctx); err != nil {
+		t.Fatalf("HandleSendPaymentRequest returned error: %v", err)
+	}
+
+	if len(ctx.sent) != 1 {
+		t.Fatalf("expected 1 sent message, got %d", len(ctx.sent))
+	}
+	if !strings.Contains(ctx.sent[0], "1 месяц - 400 ₽") {
+		t.Fatalf("expected exact package price in message, got %q", ctx.sent[0])
+	}
+	if !strings.Contains(ctx.sent[0], "12 месяцев - 3360 ₽") {
+		t.Fatalf("expected full package list in message, got %q", ctx.sent[0])
+	}
+}
+
 func TestHandleChooseSubscriptionPackageRejectsInvalidMonth(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/users/777/subscription-packages" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": [
+				{"month": 1, "price": 400, "discount_percent": 0},
+				{"month": 3, "price": 1080, "discount_percent": 10},
+				{"month": 6, "price": 1920, "discount_percent": 20},
+				{"month": 12, "price": 3360, "discount_percent": 30}
+			]
+		}`))
+	}))
+	defer server.Close()
+
+	setupAPIEnv(t, server)
+
 	ctx := newTestContext()
 	ctx.cb = &telebot.Callback{Data: "choose_subscription_package|2"}
 

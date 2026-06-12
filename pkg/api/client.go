@@ -8,6 +8,7 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -219,6 +220,12 @@ type Balance struct {
 	Debt   float64
 }
 
+type SubscriptionPackage struct {
+	Month           int `json:"month"`
+	Price           int `json:"price"`
+	DiscountPercent int `json:"discount_percent"`
+}
+
 func (c *Client) GetBalance() (Balance, error) {
 	respBytes, err := Request("GET", c.userPath("balance"), nil)
 	if err != nil {
@@ -296,6 +303,24 @@ func (c *Client) GetRegistrationStatus() (RegistrationStatus, error) {
 	}
 
 	return data, nil
+}
+
+func (c *Client) GetSubscriptionPackages() ([]SubscriptionPackage, error) {
+	respBytes, err := Request("GET", c.userPath("subscription-packages"), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var packages []SubscriptionPackage
+	if err := unmarshalAPIData(respBytes, &packages); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
+	}
+
+	sort.Slice(packages, func(i, j int) bool {
+		return packages[i].Month < packages[j].Month
+	})
+
+	return packages, nil
 }
 
 type PaymentResponse struct {

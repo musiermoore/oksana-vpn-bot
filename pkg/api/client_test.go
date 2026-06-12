@@ -192,6 +192,42 @@ func TestSendPaymentRequestParsesActivatedResponse(t *testing.T) {
 	}
 }
 
+func TestGetSubscriptionPackagesParsesPricingPayload(t *testing.T) {
+	client := withTestAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/users/123/subscription-packages" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodGet {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"data": [
+				{"month": 12, "price": 3360, "discount_percent": 30},
+				{"month": 1, "price": 400, "discount_percent": 0},
+				{"month": 6, "price": 1920, "discount_percent": 20},
+				{"month": 3, "price": 1080, "discount_percent": 10}
+			]
+		}`))
+	})
+
+	packages, err := client.GetSubscriptionPackages()
+	if err != nil {
+		t.Fatalf("GetSubscriptionPackages returned error: %v", err)
+	}
+
+	if len(packages) != 4 {
+		t.Fatalf("expected 4 packages, got %d", len(packages))
+	}
+	if packages[0].Month != 1 || packages[0].Price != 400 || packages[0].DiscountPercent != 0 {
+		t.Fatalf("unexpected first package: %#v", packages[0])
+	}
+	if packages[3].Month != 12 || packages[3].Price != 3360 || packages[3].DiscountPercent != 30 {
+		t.Fatalf("unexpected last package: %#v", packages[3])
+	}
+}
+
 func TestGetVlessSubscriptionLinkParsesJSONLinkPayload(t *testing.T) {
 	client := withTestAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/users/123/vless/link" {

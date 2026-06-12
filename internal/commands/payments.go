@@ -4,19 +4,11 @@ import (
 	"fmt"
 	"oksana-vpn-telegram-bot/pkg/api"
 	"oksana-vpn-telegram-bot/pkg/utils"
+	"strconv"
 	"strings"
 
 	telebot "gopkg.in/telebot.v4"
 )
-
-var subscriptionPackages = []int{1, 3, 6, 12}
-
-var subscriptionDiscounts = map[int]int{
-	1:  0,
-	3:  10,
-	6:  20,
-	12: 30,
-}
 
 func HandleBalance(c telebot.Context) error {
 	kb := &telebot.ReplyMarkup{}
@@ -58,21 +50,43 @@ func HandleBalance(c telebot.Context) error {
 }
 
 func HandleSendPaymentRequest(c telebot.Context) error {
-	return c.Send(getSubscriptionPackagePrompt(), getSubscriptionPackageKeyboard())
+	client := api.NewClient(c)
+	packages, err := client.GetSubscriptionPackages()
+	if err != nil {
+		if api.IsMissingUserError(404, err.Error()) {
+			return c.Send(missingUserMessage())
+		}
+		return c.Send("Не получилось загрузить пакеты подписки. Попробуй чуть позже.")
+	}
+
+	if len(packages) == 0 {
+		return c.Send("Сейчас нет доступных пакетов подписки. Попробуй чуть позже.")
+	}
+
+	return c.Send(getSubscriptionPackagePrompt(packages), getSubscriptionPackageKeyboard(packages))
 }
 
 func HandleChooseSubscriptionPackage(c telebot.Context) error {
 	month, err := parseSubscriptionMonthCallback(c.Callback().Data, "choose_subscription_package|")
 	if err != nil {
-		kb := &telebot.ReplyMarkup{}
-		btnRetry := kb.Data("Выбрать пакет", "send_payment_request")
-		btnToStart := kb.Data("К началу", "to_start")
-		kb.Inline(kb.Row(btnRetry, btnToStart))
-
-		return c.Send("Неверный пакет подписки. Выбери один из доступных вариантов.", kb)
+		return c.Send("Неверный пакет подписки. Выбери один из доступных вариантов.", getRetrySubscriptionPackageKeyboard())
 	}
 
-	return c.Send(getSubscriptionBankPrompt(month), getSubscriptionBankKeyboard(month))
+	client := api.NewClient(c)
+	packages, err := client.GetSubscriptionPackages()
+	if err != nil {
+		if api.IsMissingUserError(404, err.Error()) {
+			return c.Send(missingUserMessage())
+		}
+		return c.Send("Не получилось проверить пакет подписки. Попробуй чуть позже.")
+	}
+
+	selectedPackage, ok := findSubscriptionPackage(packages, month)
+	if !ok {
+		return c.Send("Неверный пакет подписки. Выбери один из доступных вариантов.", getRetrySubscriptionPackageKeyboard())
+	}
+
+	return c.Send(getSubscriptionBankPrompt(selectedPackage), getSubscriptionBankKeyboard(month))
 }
 
 func HandleSubmitPaymentRequest(c telebot.Context) error {
@@ -145,34 +159,56 @@ func HandleDepositAction(c telebot.Context) error {
 	return c.Send(responseText)
 }
 
-func getSubscriptionPackagePrompt() string {
-	return `Доступные пакеты подписки:
+func getSubscriptionPackagePrompt(packages []api.SubscriptionPackage) string {
+	lines := []string{"Доступные пакеты подписки:", ""}
 
-1 месяц - скидка 0%
-3 месяца - скидка 10%
-6 месяцев - скидка 20%
-12 месяцев - скидка 30%`
+	for _, subscriptionPackage := range packages {
+		lines = append(lines, fmt.Sprintf(
+			"%s - %d ₽ (скидка %d%%)",
+			formatSubscriptionDuration(subscriptionPackage.Month),
+			subscriptionPackage.Price,
+			subscriptionPackage.DiscountPercent,
+		))
+	}
+
+	return strings.Join(lines, "\n")
 }
 
-func getSubscriptionPackageKeyboard() *telebot.ReplyMarkup {
+func getSubscriptionPackageKeyboard(packages []api.SubscriptionPackage) *telebot.ReplyMarkup {
 	kb := &telebot.ReplyMarkup{}
-	btnOne := kb.Data("1 месяц", "choose_subscription_package|1")
-	btnThree := kb.Data("3 месяца", "choose_subscription_package|3")
-	btnSix := kb.Data("6 месяцев", "choose_subscription_package|6")
-	btnTwelve := kb.Data("12 месяцев", "choose_subscription_package|12")
 	btnCancel := kb.Data("Отменить", "cancel_payment_and_return_to_start")
 
-	kb.Inline(
-		kb.Row(btnOne, btnThree),
-		kb.Row(btnSix, btnTwelve),
-		kb.Row(btnCancel),
-	)
+	var rows []telebot.Row
+	for i := 0; i < len(packages); i += 2 {
+		buttons := []telebot.Btn{
+			kb.Data(
+				fmt.Sprintf("%s - %d ₽", formatSubscriptionDuration(packages[i].Month), packages[i].Price),
+				fmt.Sprintf("choose_subscription_package|%d", packages[i].Month),
+			),
+		}
+
+		if i+1 < len(packages) {
+			buttons = append(buttons, kb.Data(
+				fmt.Sprintf("%s - %d ₽", formatSubscriptionDuration(packages[i+1].Month), packages[i+1].Price),
+				fmt.Sprintf("choose_subscription_package|%d", packages[i+1].Month),
+			))
+		}
+
+		rows = append(rows, kb.Row(buttons...))
+	}
+
+	rows = append(rows, kb.Row(btnCancel))
+	kb.Inline(rows...)
 
 	return kb
 }
 
-func getSubscriptionBankPrompt(month int) string {
-	return fmt.Sprintf("Выбран пакет на %s. Теперь выбери банк для оплаты.", formatSubscriptionDuration(month))
+func getSubscriptionBankPrompt(subscriptionPackage api.SubscriptionPackage) string {
+	return fmt.Sprintf(
+		"Выбран пакет на %s за %d ₽. Теперь выбери банк для оплаты.",
+		formatSubscriptionDuration(subscriptionPackage.Month),
+		subscriptionPackage.Price,
+	)
 }
 
 func getSubscriptionBankKeyboard(month int) *telebot.ReplyMarkup {
@@ -200,11 +236,20 @@ func parseSubscriptionMonthCallback(data string, prefix string) (int, error) {
 		return 0, err
 	}
 
-	if !isSupportedSubscriptionMonth(month) {
+	if month <= 0 {
 		return 0, fmt.Errorf("unsupported month")
 	}
 
 	return month, nil
+}
+
+func getRetrySubscriptionPackageKeyboard() *telebot.ReplyMarkup {
+	kb := &telebot.ReplyMarkup{}
+	btnRetry := kb.Data("Выбрать пакет", "send_payment_request")
+	btnToStart := kb.Data("К началу", "to_start")
+	kb.Inline(kb.Row(btnRetry, btnToStart))
+
+	return kb
 }
 
 func parseSubscriptionSubmitCallback(data string) (int, string, error) {
@@ -213,9 +258,12 @@ func parseSubscriptionSubmitCallback(data string) (int, string, error) {
 		return 0, "", fmt.Errorf("invalid callback")
 	}
 
-	month, err := parseSubscriptionMonthCallback("choose_subscription_package|"+parts[1], "choose_subscription_package|")
+	month, err := strconv.Atoi(strings.TrimSpace(parts[1]))
 	if err != nil {
 		return 0, "", err
+	}
+	if month <= 0 {
+		return 0, "", fmt.Errorf("unsupported month")
 	}
 
 	bank := strings.TrimSpace(parts[2])
@@ -224,16 +272,6 @@ func parseSubscriptionSubmitCallback(data string) (int, string, error) {
 	}
 
 	return month, bank, nil
-}
-
-func isSupportedSubscriptionMonth(month int) bool {
-	for _, allowedMonth := range subscriptionPackages {
-		if month == allowedMonth {
-			return true
-		}
-	}
-
-	return false
 }
 
 func formatSubscriptionDuration(month int) string {
@@ -249,6 +287,16 @@ func formatSubscriptionDuration(month int) string {
 	default:
 		return fmt.Sprintf("%d мес.", month)
 	}
+}
+
+func findSubscriptionPackage(packages []api.SubscriptionPackage, month int) (api.SubscriptionPackage, bool) {
+	for _, subscriptionPackage := range packages {
+		if subscriptionPackage.Month == month {
+			return subscriptionPackage, true
+		}
+	}
+
+	return api.SubscriptionPackage{}, false
 }
 
 func buildSubscriptionPurchaseMessage(response api.PaymentResponse) string {
