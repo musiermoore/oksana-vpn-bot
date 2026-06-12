@@ -16,13 +16,15 @@ import (
 type fakeContext struct {
 	sender *telebot.User
 	chat   *telebot.Chat
+	msg    *telebot.Message
+	cb     *telebot.Callback
 	sent   []string
 }
 
 func (f *fakeContext) Bot() telebot.API                                { return nil }
 func (f *fakeContext) Update() telebot.Update                          { return telebot.Update{} }
-func (f *fakeContext) Message() *telebot.Message                       { return nil }
-func (f *fakeContext) Callback() *telebot.Callback                     { return nil }
+func (f *fakeContext) Message() *telebot.Message                       { return f.msg }
+func (f *fakeContext) Callback() *telebot.Callback                     { return f.cb }
 func (f *fakeContext) Query() *telebot.Query                           { return nil }
 func (f *fakeContext) InlineResult() *telebot.InlineResult             { return nil }
 func (f *fakeContext) ShippingQuery() *telebot.ShippingQuery           { return nil }
@@ -344,6 +346,113 @@ func TestHandleBalanceWithWrappedAPIResponses(t *testing.T) {
 	}
 	if !strings.Contains(message, "2026\\-06\\-01") {
 		t.Fatalf("expected escaped end date in message, got %q", message)
+	}
+}
+
+func TestGetSubscriptionPackageKeyboardContainsExpectedButtons(t *testing.T) {
+	kb := getSubscriptionPackageKeyboard()
+
+	if len(kb.InlineKeyboard) != 3 {
+		t.Fatalf("expected 3 rows, got %d", len(kb.InlineKeyboard))
+	}
+	if kb.InlineKeyboard[0][0].Text != "1 месяц" || kb.InlineKeyboard[0][0].Unique != "choose_subscription_package|1" {
+		t.Fatalf("unexpected first package button: %#v", kb.InlineKeyboard[0][0])
+	}
+	if kb.InlineKeyboard[1][1].Text != "12 месяцев" || kb.InlineKeyboard[1][1].Unique != "choose_subscription_package|12" {
+		t.Fatalf("unexpected last package button: %#v", kb.InlineKeyboard[1][1])
+	}
+}
+
+func TestHandleChooseSubscriptionPackageRejectsInvalidMonth(t *testing.T) {
+	ctx := newTestContext()
+	ctx.cb = &telebot.Callback{Data: "choose_subscription_package|2"}
+
+	if err := HandleChooseSubscriptionPackage(ctx); err != nil {
+		t.Fatalf("HandleChooseSubscriptionPackage returned error: %v", err)
+	}
+
+	if len(ctx.sent) != 1 {
+		t.Fatalf("expected 1 sent message, got %d", len(ctx.sent))
+	}
+	if !strings.Contains(ctx.sent[0], "Неверный пакет подписки") {
+		t.Fatalf("unexpected message: %q", ctx.sent[0])
+	}
+}
+
+func TestHandleSubmitPaymentRequestActivatedMessage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/users/777/transactions" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		payload := decodeRequestBody(t, r)
+		if payload["month"] != float64(3) {
+			t.Fatalf("unexpected month payload: %#v", payload["month"])
+		}
+		if payload["bank"] != "tbank" {
+			t.Fatalf("unexpected bank payload: %#v", payload["bank"])
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"activated","message":"Подписка активирована до 18.11.2026.","end_date":"2026-11-18","formatted_end_date":"18.11.2026"}`))
+	}))
+	defer server.Close()
+
+	setupAPIEnv(t, server)
+
+	ctx := newTestContext()
+	ctx.cb = &telebot.Callback{Data: "submit_payment_request|3|tbank"}
+
+	if err := HandleSubmitPaymentRequest(ctx); err != nil {
+		t.Fatalf("HandleSubmitPaymentRequest returned error: %v", err)
+	}
+
+	if len(ctx.sent) != 1 {
+		t.Fatalf("expected 1 sent message, got %d", len(ctx.sent))
+	}
+	if !strings.Contains(ctx.sent[0], "Подписка активирована до 18.11.2026.") {
+		t.Fatalf("unexpected activation message: %q", ctx.sent[0])
+	}
+	if !strings.Contains(ctx.sent[0], "Подписка уже активна") {
+		t.Fatalf("expected immediate activation hint, got %q", ctx.sent[0])
+	}
+}
+
+func TestHandleSubmitPaymentRequestDepositRequiredMessage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"deposit_required","message":"Для активации подписки нужно пополнить баланс на 520.","deposit_amount":520,"transaction_id":1}`))
+	}))
+	defer server.Close()
+
+	setupAPIEnv(t, server)
+
+	ctx := newTestContext()
+	ctx.cb = &telebot.Callback{Data: "submit_payment_request|6|tbank"}
+
+	if err := HandleSubmitPaymentRequest(ctx); err != nil {
+		t.Fatalf("HandleSubmitPaymentRequest returned error: %v", err)
+	}
+
+	if len(ctx.sent) != 1 {
+		t.Fatalf("expected 1 sent message, got %d", len(ctx.sent))
+	}
+	if !strings.Contains(ctx.sent[0], "Для активации подписки нужно пополнить баланс на 520.") {
+		t.Fatalf("unexpected deposit-required message: %q", ctx.sent[0])
+	}
+	if !strings.Contains(ctx.sent[0], "подтверждения оплаты подписка активируется автоматически") {
+		t.Fatalf("expected auto-activation explanation, got %q", ctx.sent[0])
+	}
+}
+
+func TestBuildSubscriptionPurchaseMessageUsesFormattedEndDateFallback(t *testing.T) {
+	message := buildSubscriptionPurchaseMessage(api.PaymentResponse{
+		Status:           "activated",
+		FormattedEndDate: "18.11.2026",
+	})
+
+	if !strings.Contains(message, "18.11.2026") {
+		t.Fatalf("expected formatted end date in message, got %q", message)
 	}
 }
 

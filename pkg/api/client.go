@@ -299,19 +299,23 @@ func (c *Client) GetRegistrationStatus() (RegistrationStatus, error) {
 }
 
 type PaymentResponse struct {
-	Status  bool
-	Message string
+	Status           string `json:"status"`
+	Message          string `json:"message"`
+	DepositAmount    int    `json:"deposit_amount"`
+	TransactionID    int    `json:"transaction_id"`
+	EndDate          string `json:"end_date"`
+	FormattedEndDate string `json:"formatted_end_date"`
 }
 
-func (c *Client) SendPaymentRequest(amount float32) (PaymentResponse, error) {
+func (c *Client) SendPaymentRequest(month int, bank string) (PaymentResponse, error) {
 	type PaymentBody struct {
-		Amount float32 `json:"amount"`
-		Bank   string  `json:"bank"`
+		Month int    `json:"month"`
+		Bank  string `json:"bank"`
 	}
 
 	respBytes, err := Request("POST", c.userPath("transactions"), PaymentBody{
-		Amount: amount,
-		Bank:   "tbank",
+		Month: month,
+		Bank:  bank,
 	})
 
 	if len(respBytes) == 0 {
@@ -320,21 +324,18 @@ func (c *Client) SendPaymentRequest(amount float32) (PaymentResponse, error) {
 		}, fmt.Errorf("empty response from API: %w", err)
 	}
 
-	message, parseErr := parseAPIMessage(respBytes)
+	response, parseErr := parsePaymentResponse(respBytes)
 	if parseErr != nil {
 		return PaymentResponse{
 			Message: "Что-то пошло не так :(",
 		}, fmt.Errorf("failed to parse JSON: %w; raw: %s", parseErr, string(respBytes))
 	}
 
-	if message == "" {
-		message = "Что-то пошло не так :("
+	if response.Message == "" {
+		response.Message = "Что-то пошло не так :("
 	}
 
-	return PaymentResponse{
-		Status:  err == nil,
-		Message: message,
-	}, nil
+	return response, err
 }
 
 func (c *Client) ApprovePaymentRequest(transactionID string) error {
@@ -698,6 +699,26 @@ func parseAPIMessage(body []byte) (string, error) {
 	}
 
 	return "", nil
+}
+
+func parsePaymentResponse(body []byte) (PaymentResponse, error) {
+	if len(body) == 0 {
+		return PaymentResponse{}, nil
+	}
+
+	var response PaymentResponse
+	if err := unmarshalAPIData(body, &response); err != nil {
+		return PaymentResponse{}, err
+	}
+
+	if response.Message == "" {
+		message, err := parseAPIMessage(body)
+		if err == nil {
+			response.Message = message
+		}
+	}
+
+	return response, nil
 }
 
 func parseConfigResponse(body []byte) (ConfigResponse, error) {

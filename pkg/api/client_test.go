@@ -139,6 +139,59 @@ func TestGetRegistrationStatusParsesResourceAttributesPayload(t *testing.T) {
 	}
 }
 
+func TestSendPaymentRequestUsesMonthPayload(t *testing.T) {
+	client := withTestAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/users/123/transactions" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+
+		payload := decodeBody(t, r)
+		if _, exists := payload["amount"]; exists {
+			t.Fatalf("amount should not be sent in subscription request payload")
+		}
+		if payload["month"] != float64(6) {
+			t.Fatalf("unexpected month payload: %#v", payload["month"])
+		}
+		if payload["bank"] != "tbank" {
+			t.Fatalf("unexpected bank payload: %#v", payload["bank"])
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"deposit_required","message":"Для активации подписки нужно пополнить баланс на 520.","deposit_amount":520,"transaction_id":1}`))
+	})
+
+	response, err := client.SendPaymentRequest(6, "tbank")
+	if err != nil {
+		t.Fatalf("SendPaymentRequest returned error: %v", err)
+	}
+
+	if response.Status != "deposit_required" || response.DepositAmount != 520 || response.TransactionID != 1 {
+		t.Fatalf("unexpected payment response: %#v", response)
+	}
+}
+
+func TestSendPaymentRequestParsesActivatedResponse(t *testing.T) {
+	client := withTestAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"activated","message":"Подписка активирована до 18.11.2026.","end_date":"2026-11-18","formatted_end_date":"18.11.2026"}`))
+	})
+
+	response, err := client.SendPaymentRequest(3, "tbank")
+	if err != nil {
+		t.Fatalf("SendPaymentRequest returned error: %v", err)
+	}
+
+	if response.Status != "activated" {
+		t.Fatalf("unexpected status: %#v", response)
+	}
+	if response.FormattedEndDate != "18.11.2026" || response.EndDate != "2026-11-18" {
+		t.Fatalf("unexpected dates: %#v", response)
+	}
+}
+
 func TestGetVlessSubscriptionLinkParsesJSONLinkPayload(t *testing.T) {
 	client := withTestAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/users/123/vless/link" {

@@ -4,8 +4,6 @@ import (
 	"oksana-vpn-telegram-bot/pkg/api"
 )
 
-var waitingForAmount = make(map[int64]bool)
-
 func missingUserMessage() string {
 	return api.MissingUserMessage()
 }

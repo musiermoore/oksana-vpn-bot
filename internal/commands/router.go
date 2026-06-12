@@ -1,8 +1,6 @@
 package commands
 
 import (
-	"fmt"
-	"strconv"
 	"strings"
 
 	telebot "gopkg.in/telebot.v4"
@@ -62,14 +60,15 @@ func RegisterCommands(bot *telebot.Bot) {
 			return HandleVlessLinkAction(c)
 		case data == "vless|qr":
 			return HandleVlessQrAction(c)
-		case strings.HasPrefix(data, "send_payment_request"):
+		case data == "send_payment_request":
 			return HandleSendPaymentRequest(c)
+		case strings.HasPrefix(data, "choose_subscription_package|"):
+			return HandleChooseSubscriptionPackage(c)
 		case strings.HasPrefix(data, "submit_payment_request|"):
 			return HandleSubmitPaymentRequest(c)
 		case strings.HasPrefix(data, "approve_deposit|"), strings.HasPrefix(data, "deny_deposit|"):
 			return HandleDepositAction(c)
 		case data == "cancel_payment_and_return_to_start":
-			waitingForAmount[c.Sender().ID] = false
 			_ = c.Respond(&telebot.CallbackResponse{})
 
 			kb := &telebot.ReplyMarkup{}
@@ -80,31 +79,5 @@ func RegisterCommands(bot *telebot.Bot) {
 		default:
 			return c.Respond()
 		}
-	})
-
-	bot.Handle(telebot.OnText, func(c telebot.Context) error {
-		userID := c.Sender().ID
-		text := c.Message().Text
-
-		if !waitingForAmount[userID] {
-			return c.Send("Используй /start и кнопки в меню.")
-		}
-
-		kb := &telebot.ReplyMarkup{}
-		btnCancel := kb.Data("Отменить", "cancel_payment_and_return_to_start")
-
-		amount, err := strconv.ParseFloat(text, 64)
-		if err != nil || amount <= 0 {
-			waitingForAmount[userID] = true
-			kb.Inline(kb.Row(btnCancel))
-			return c.Send("Нужно ввести число больше 0.", kb)
-		}
-
-		waitingForAmount[userID] = false
-
-		btnAdd := kb.Data("Добавить", fmt.Sprintf("submit_payment_request|%f", amount))
-		kb.Inline(kb.Row(btnAdd, btnCancel))
-
-		return c.Send(fmt.Sprintf("✅ Отправить запрос на пополение %.2f руб?", amount), kb)
 	})
 }
