@@ -360,10 +360,10 @@ func TestGetSubscriptionPackageKeyboardContainsExpectedButtons(t *testing.T) {
 	if len(kb.InlineKeyboard) != 3 {
 		t.Fatalf("expected 3 rows, got %d", len(kb.InlineKeyboard))
 	}
-	if kb.InlineKeyboard[0][0].Text != "1 месяц - 400 ₽" || kb.InlineKeyboard[0][0].Unique != "choose_subscription_package|1" {
+	if kb.InlineKeyboard[0][0].Text != "1 месяц - 400 ₽" || kb.InlineKeyboard[0][0].Unique != "submit_payment_request|1" {
 		t.Fatalf("unexpected first package button: %#v", kb.InlineKeyboard[0][0])
 	}
-	if kb.InlineKeyboard[1][1].Text != "12 месяцев - 3360 ₽" || kb.InlineKeyboard[1][1].Unique != "choose_subscription_package|12" {
+	if kb.InlineKeyboard[1][1].Text != "12 месяцев - 3360 ₽" || kb.InlineKeyboard[1][1].Unique != "submit_payment_request|12" {
 		t.Fatalf("unexpected last package button: %#v", kb.InlineKeyboard[1][1])
 	}
 }
@@ -461,7 +461,7 @@ func TestHandleSubmitPaymentRequestActivatedMessage(t *testing.T) {
 	setupAPIEnv(t, server)
 
 	ctx := newTestContext()
-	ctx.cb = &telebot.Callback{Data: "submit_payment_request|3|tbank"}
+	ctx.cb = &telebot.Callback{Data: "submit_payment_request|3"}
 
 	if err := HandleSubmitPaymentRequest(ctx); err != nil {
 		t.Fatalf("HandleSubmitPaymentRequest returned error: %v", err)
@@ -488,7 +488,7 @@ func TestHandleSubmitPaymentRequestDepositRequiredMessage(t *testing.T) {
 	setupAPIEnv(t, server)
 
 	ctx := newTestContext()
-	ctx.cb = &telebot.Callback{Data: "submit_payment_request|6|tbank"}
+	ctx.cb = &telebot.Callback{Data: "submit_payment_request|6"}
 
 	if err := HandleSubmitPaymentRequest(ctx); err != nil {
 		t.Fatalf("HandleSubmitPaymentRequest returned error: %v", err)

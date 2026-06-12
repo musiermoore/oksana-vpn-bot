@@ -88,7 +88,7 @@ func HandleChooseSubscriptionPackage(c telebot.Context) error {
 		return c.Send("Неверный пакет подписки. Выбери один из доступных вариантов.", getRetrySubscriptionPackageKeyboard())
 	}
 
-	return c.Send(getSubscriptionBankPrompt(selectedPackage), getSubscriptionBankKeyboard(month))
+	return submitSubscriptionPurchase(c, selectedPackage.Month)
 }
 
 func HandleSubmitPaymentRequest(c telebot.Context) error {
@@ -97,22 +97,14 @@ func HandleSubmitPaymentRequest(c telebot.Context) error {
 	kb := &telebot.ReplyMarkup{}
 	btnToStart := kb.Data("К началу", "to_start")
 
-	month, bank, err := parseSubscriptionSubmitCallback(data)
+	month, err := parseSubscriptionSubmitCallback(data)
 	if err != nil {
 		btnTryAgain := kb.Data("Повторить", "send_payment_request")
 		kb.Inline(kb.Row(btnTryAgain, btnToStart))
-		return c.Send("Не получилось определить пакет подписки или банк. Попробуй ещё раз.", kb)
+		return c.Send("Не получилось определить пакет подписки. Попробуй ещё раз.", kb)
 	}
 
-	kb.Inline(kb.Row(btnToStart))
-
-	client := api.NewClient(c)
-	response, err := client.SendPaymentRequest(month, bank)
-	if err != nil && api.IsMissingUserError(404, response.Message) {
-		return c.Send(missingUserMessage(), kb)
-	}
-
-	return c.Send(buildSubscriptionPurchaseMessage(response), kb)
+	return submitSubscriptionPurchase(c, month)
 }
 
 func HandleDepositAction(c telebot.Context) error {
@@ -185,14 +177,14 @@ func getSubscriptionPackageKeyboard(packages []api.SubscriptionPackage) *telebot
 		buttons := []telebot.Btn{
 			kb.Data(
 				fmt.Sprintf("%s - %d ₽", formatSubscriptionDuration(packages[i].Month), packages[i].Price),
-				fmt.Sprintf("choose_subscription_package|%d", packages[i].Month),
+				fmt.Sprintf("submit_payment_request|%d", packages[i].Month),
 			),
 		}
 
 		if i+1 < len(packages) {
 			buttons = append(buttons, kb.Data(
 				fmt.Sprintf("%s - %d ₽", formatSubscriptionDuration(packages[i+1].Month), packages[i+1].Price),
-				fmt.Sprintf("choose_subscription_package|%d", packages[i+1].Month),
+				fmt.Sprintf("submit_payment_request|%d", packages[i+1].Month),
 			))
 		}
 
@@ -201,28 +193,6 @@ func getSubscriptionPackageKeyboard(packages []api.SubscriptionPackage) *telebot
 
 	rows = append(rows, kb.Row(btnCancel))
 	kb.Inline(rows...)
-
-	return kb
-}
-
-func getSubscriptionBankPrompt(subscriptionPackage api.SubscriptionPackage) string {
-	return fmt.Sprintf(
-		"Выбран пакет на %s за %d ₽. Теперь выбери банк для оплаты.",
-		formatSubscriptionDuration(subscriptionPackage.Month),
-		subscriptionPackage.Price,
-	)
-}
-
-func getSubscriptionBankKeyboard(month int) *telebot.ReplyMarkup {
-	kb := &telebot.ReplyMarkup{}
-	btnTBank := kb.Data("Т-Банк", fmt.Sprintf("submit_payment_request|%d|tbank", month))
-	btnBack := kb.Data("Выбрать другой пакет", "send_payment_request")
-	btnCancel := kb.Data("Отменить", "cancel_payment_and_return_to_start")
-
-	kb.Inline(
-		kb.Row(btnTBank),
-		kb.Row(btnBack, btnCancel),
-	)
 
 	return kb
 }
@@ -249,31 +219,29 @@ func getRetrySubscriptionPackageKeyboard() *telebot.ReplyMarkup {
 	kb := &telebot.ReplyMarkup{}
 	btnRetry := kb.Data("Выбрать пакет", "send_payment_request")
 	btnToStart := kb.Data("К началу", "to_start")
-	kb.Inline(kb.Row(btnRetry, btnToStart))
+	kb.Inline(
+		kb.Row(btnRetry),
+		kb.Row(btnToStart),
+	)
 
 	return kb
 }
 
-func parseSubscriptionSubmitCallback(data string) (int, string, error) {
+func parseSubscriptionSubmitCallback(data string) (int, error) {
 	parts := strings.Split(strings.TrimSpace(data), "|")
-	if len(parts) != 3 || parts[0] != "submit_payment_request" {
-		return 0, "", fmt.Errorf("invalid callback")
+	if len(parts) < 2 || parts[0] != "submit_payment_request" {
+		return 0, fmt.Errorf("invalid callback")
 	}
 
 	month, err := strconv.Atoi(strings.TrimSpace(parts[1]))
 	if err != nil {
-		return 0, "", err
+		return 0, err
 	}
 	if month <= 0 {
-		return 0, "", fmt.Errorf("unsupported month")
+		return 0, fmt.Errorf("unsupported month")
 	}
 
-	bank := strings.TrimSpace(parts[2])
-	if bank == "" {
-		return 0, "", fmt.Errorf("missing bank")
-	}
-
-	return month, bank, nil
+	return month, nil
 }
 
 func formatSubscriptionDuration(month int) string {
@@ -327,4 +295,18 @@ func buildSubscriptionPurchaseMessage(response api.PaymentResponse) string {
 		}
 		return message
 	}
+}
+
+func submitSubscriptionPurchase(c telebot.Context, month int) error {
+	kb := &telebot.ReplyMarkup{}
+	btnToStart := kb.Data("К началу", "to_start")
+	kb.Inline(kb.Row(btnToStart))
+
+	client := api.NewClient(c)
+	response, err := client.SendPaymentRequest(month, "tbank")
+	if err != nil && api.IsMissingUserError(404, response.Message) {
+		return c.Send(missingUserMessage(), kb)
+	}
+
+	return c.Send(buildSubscriptionPurchaseMessage(response), kb)
 }
