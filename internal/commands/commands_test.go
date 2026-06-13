@@ -361,6 +361,67 @@ func TestGetHelpVLESSClientsKeyboardContainsLinks(t *testing.T) {
 	}
 }
 
+func TestGetConfigsKeyboardUsesCompactCallbackData(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/users/777/configs/wireguard" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"configs":[{"id":571,"name":"musiermoore-rossiia-qkayasstnmdlzued"}]}}`))
+	}))
+	defer server.Close()
+
+	setupAPIEnv(t, server)
+
+	ctx := newTestContext()
+	kb, _, err := getConfigsKeyboard(ctx, "wireguard")
+	if err != nil {
+		t.Fatalf("getConfigsKeyboard returned error: %v", err)
+	}
+
+	if got := kb.InlineKeyboard[0][0].Unique; got != "config|wireguard|571" {
+		t.Fatalf("unexpected callback data: %q", got)
+	}
+}
+
+func TestHandleChoosingConfigBuildsCompactActionButtonsAndResolvesName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/users/777/configs/wireguard" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"configs":[{"id":571,"name":"musiermoore-rossiia-qkayasstnmdlzued"}]}}`))
+	}))
+	defer server.Close()
+
+	setupAPIEnv(t, server)
+
+	ctx := newTestContext()
+	ctx.cb = &telebot.Callback{Data: "\fconfig|wireguard|571"}
+
+	if err := HandleChoosingConfig(ctx); err != nil {
+		t.Fatalf("HandleChoosingConfig returned error: %v", err)
+	}
+
+	if len(ctx.sent) != 1 {
+		t.Fatalf("expected 1 sent message, got %d", len(ctx.sent))
+	}
+	if got := ctx.sent[0]; got != "Выбери действие для конфига musiermoore-rossiia-qkayasstnmdlzued" {
+		t.Fatalf("unexpected message: %q", got)
+	}
+	if len(ctx.replyMarkups) != 1 {
+		t.Fatalf("expected 1 reply markup, got %d", len(ctx.replyMarkups))
+	}
+	if got := ctx.replyMarkups[0].InlineKeyboard[0][0].Unique; got != "action_config_qr|wireguard|571" {
+		t.Fatalf("unexpected QR callback data: %q", got)
+	}
+	if got := ctx.replyMarkups[0].InlineKeyboard[0][1].Unique; got != "action_config_file|wireguard|571" {
+		t.Fatalf("unexpected file callback data: %q", got)
+	}
+}
+
 func TestHelpTextsLoadedFromFiles(t *testing.T) {
 	if !strings.Contains(getHelpWGMessage(), "Настройка WG") {
 		t.Fatalf("unexpected WG help text: %q", getHelpWGMessage())
@@ -401,7 +462,7 @@ func TestHandleSubscriptionWithWrappedAPIResponses(t *testing.T) {
 	if !strings.Contains(message, "150\\.50") {
 		t.Fatalf("expected escaped balance in message, got %q", message)
 	}
-	if !strings.Contains(message, "2026\\-06\\-01") {
+	if !strings.Contains(message, "01\\.06\\.2026") {
 		t.Fatalf("expected escaped end date in message, got %q", message)
 	}
 }

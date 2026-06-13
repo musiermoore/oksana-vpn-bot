@@ -20,7 +20,7 @@ func getConfigsKeyboard(c telebot.Context, configType string) (*telebot.ReplyMar
 
 	if err == nil {
 		for _, config := range response.Configs {
-			row := kb.Data(config.Name, "config|"+configType+"|"+strconv.Itoa(int(config.ID))+"|"+config.Name)
+			row := kb.Data(config.Name, "config|"+configType+"|"+strconv.Itoa(int(config.ID)))
 			inline = append(inline, kb.Row(row))
 		}
 	} else if response.Type == "debt" {
@@ -75,17 +75,19 @@ func HandleChoosingConfig(c telebot.Context) error {
 	parts := strings.Split(config, "|")
 
 	configType := parts[1]
-	configName := parts[3]
+	configID := parts[2]
+	configName := lookupConfigName(c, configType, configID)
 
 	kb := &telebot.ReplyMarkup{}
-	btnQR := kb.Data("QR Code", "action_config_qr|"+config)
+	btnQR := kb.Data("QR Code", "action_config_qr|"+configType+"|"+configID)
 
+	fmt.Println("HandleChoosing: " + config)
 	var actionButtons []telebot.Btn
 	if configType == "vless" {
-		btnLink := kb.Data("Получить ссылку", "action_config_link|"+config)
+		btnLink := kb.Data("Получить ссылку", "action_config_link|"+configType+"|"+configID)
 		actionButtons = []telebot.Btn{btnQR, btnLink}
 	} else {
-		btnDownload := kb.Data("Файл", "action_config_file|"+config)
+		btnDownload := kb.Data("Файл", "action_config_file|"+configType+"|"+configID)
 		actionButtons = []telebot.Btn{btnQR, btnDownload}
 	}
 
@@ -101,36 +103,39 @@ func HandleChoosingConfig(c telebot.Context) error {
 	return c.Send("Выбери действие для конфига "+configName, kb)
 }
 
-func prepareConfigData(c telebot.Context) string {
-	data := callbackData(c.Callback().Data)
-	return strings.Replace(data, "config|", "", 1)
+func lookupConfigName(c telebot.Context, configType, configID string) string {
+	client := api.NewClient(c)
+	response, err := client.GetConfigs(configType)
+	if err != nil {
+		return "ID " + configID
+	}
+
+	for _, config := range response.Configs {
+		if strconv.Itoa(int(config.ID)) == configID {
+			return config.Name
+		}
+	}
+
+	return "ID " + configID
+}
+
+func prepareConfigData(c telebot.Context) []string {
+	return strings.Split(callbackData(c.Callback().Data), "|")
 }
 
 func getConfigType(c telebot.Context) string {
-	data := prepareConfigData(c)
-	parts := strings.Split(data, "|")
-	if strings.HasPrefix(data, "action_config_") {
-		return parts[1]
-	}
-
-	return parts[0]
-}
-
-func getConfigID(c telebot.Context) string {
-	data := prepareConfigData(c)
-	parts := strings.Split(data, "|")
-	if strings.HasPrefix(data, "action_config_") {
-		return parts[2]
+	parts := prepareConfigData(c)
+	if len(parts) < 2 {
+		return ""
 	}
 
 	return parts[1]
 }
 
-func getConfigName(c telebot.Context) string {
-	data := prepareConfigData(c)
-	parts := strings.Split(data, "|")
-	if strings.HasPrefix(data, "action_config_") {
-		return parts[3]
+func getConfigID(c telebot.Context) string {
+	parts := prepareConfigData(c)
+	if len(parts) < 3 {
+		return ""
 	}
 
 	return parts[2]
@@ -152,19 +157,19 @@ func getActionConfigKeyboard(configType string) *telebot.ReplyMarkup {
 }
 
 func HandleActionConfig(c telebot.Context) error {
-	data := prepareConfigData(c)
 	configType := getConfigType(c)
-	configName := getConfigName(c)
+	configName := lookupConfigName(c, configType, getConfigID(c))
 	kb := getActionConfigKeyboard(configType)
 
+	fmt.Println("HandleActionConfig: " + callbackData(c.Callback().Data))
 	switch {
-	case strings.HasPrefix(data, "action_config_qr|"):
+	case strings.HasPrefix(callbackData(c.Callback().Data), "action_config_qr|"):
 		return HandleQrCodeConfig(c)
-	case strings.HasPrefix(data, "action_config_file|"):
+	case strings.HasPrefix(callbackData(c.Callback().Data), "action_config_file|"):
 		return HandleDownloadConfig(c)
-	case strings.HasPrefix(data, "action_config_link|"):
+	case strings.HasPrefix(callbackData(c.Callback().Data), "action_config_link|"):
 		return HandleGetLinkConfig(c)
-	case strings.HasPrefix(data, "action_config_both|"):
+	case strings.HasPrefix(callbackData(c.Callback().Data), "action_config_both|"):
 		return c.Send("QR Code и файл для "+configName, kb)
 	default:
 		return c.Send("Непредвиденная ошибка.", kb)
@@ -180,7 +185,7 @@ func HandleDownloadConfig(c telebot.Context) error {
 	client := api.NewClient(c)
 	configType := getConfigType(c)
 	configID := getConfigID(c)
-	configName := getConfigName(c)
+	configName := lookupConfigName(c, configType, configID)
 	kb := getActionConfigKeyboard(configType)
 
 	fileData, apiError, err := client.GetConfigFile(configType, configID)
