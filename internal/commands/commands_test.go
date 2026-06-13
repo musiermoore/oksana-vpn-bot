@@ -446,7 +446,7 @@ func TestHandleChooseSubscriptionPackageRejectsInvalidMonth(t *testing.T) {
 	if len(ctx.sent) != 1 {
 		t.Fatalf("expected 1 sent message, got %d", len(ctx.sent))
 	}
-	if !strings.Contains(ctx.sent[0], "Неверный пакет подписки") {
+	if !strings.Contains(ctx.sent[0], "Не удалось найти выбранный вариант подписки") {
 		t.Fatalf("unexpected message: %q", ctx.sent[0])
 	}
 }
@@ -493,7 +493,7 @@ func TestHandleSubmitPaymentRequestActivatedMessage(t *testing.T) {
 func TestHandleSubmitPaymentRequestDepositRequiredMessage(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"status":"deposit_required","message":"Для активации подписки нужно оплатить 520 RUB через YooKassa.","deposit_amount":520.0,"transaction_id":1,"invoice_id":456,"payment_id":"uuid","payment_status":"pending","confirmation_url":"https://pay.example/confirm"}`))
+		_, _ = w.Write([]byte(`{"status":"deposit_required","message":"Для активации подписки необходимо оплатить 520 ₽.","deposit_amount":520.0,"transaction_id":1,"invoice_id":456,"payment_id":"uuid","payment_status":"pending","confirmation_url":"https://pay.example/confirm"}`))
 	}))
 	defer server.Close()
 
@@ -509,7 +509,7 @@ func TestHandleSubmitPaymentRequestDepositRequiredMessage(t *testing.T) {
 	if len(ctx.sent) != 1 {
 		t.Fatalf("expected 1 sent message, got %d", len(ctx.sent))
 	}
-	if !strings.Contains(ctx.sent[0], "Для активации подписки нужно оплатить 520 RUB через YooKassa.") {
+	if !strings.Contains(ctx.sent[0], "Для активации подписки необходимо оплатить 520 ₽.") {
 		t.Fatalf("unexpected deposit-required message: %q", ctx.sent[0])
 	}
 	if !strings.Contains(ctx.sent[0], "После успешной оплаты подписка активируется автоматически.") {
@@ -521,7 +521,7 @@ func TestHandleSubmitPaymentRequestDepositRequiredMessage(t *testing.T) {
 	if len(ctx.replyMarkups[0].InlineKeyboard) == 0 || len(ctx.replyMarkups[0].InlineKeyboard[0]) == 0 {
 		t.Fatalf("expected payment button, got %#v", ctx.replyMarkups[0])
 	}
-	if ctx.replyMarkups[0].InlineKeyboard[0][0].Text != "Оплатить через YooKassa" {
+	if ctx.replyMarkups[0].InlineKeyboard[0][0].Text != "Оплатить онлайн" {
 		t.Fatalf("unexpected payment button text: %#v", ctx.replyMarkups[0].InlineKeyboard[0][0])
 	}
 	if ctx.replyMarkups[0].InlineKeyboard[0][0].URL != "https://pay.example/confirm" {
@@ -546,7 +546,7 @@ func TestBuildSubscriptionPurchaseMessageFormatsDepositAmount(t *testing.T) {
 		DepositAmount: 520,
 	})
 
-	if !strings.Contains(message, "520 RUB через YooKassa") {
+	if !strings.Contains(message, "оплатить 520 ₽.") {
 		t.Fatalf("expected formatted deposit amount in message, got %q", message)
 	}
 }

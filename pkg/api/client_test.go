@@ -160,7 +160,7 @@ func TestSendPaymentRequestUsesMonthPayload(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"status":"deposit_required","message":"Для активации подписки нужно оплатить 520 RUB через YooKassa.","deposit_amount":520.0,"transaction_id":1,"invoice_id":456,"payment_id":"uuid","payment_status":"pending","confirmation_url":"https://pay.example/confirm"}`))
+		_, _ = w.Write([]byte(`{"status":"deposit_required","message":"Для активации подписки необходимо оплатить 520 ₽.","deposit_amount":520.0,"transaction_id":1,"invoice_id":456,"payment_id":"uuid","payment_status":"pending","confirmation_url":"https://pay.example/confirm"}`))
 	})
 
 	response, err := client.SendPaymentRequest(6, "tbank")

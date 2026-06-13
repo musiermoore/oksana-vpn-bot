@@ -32,17 +32,27 @@ func HandleSubscription(c telebot.Context) error {
 		return c.Send("Произошла ошибка. Попробуй чуть позже.")
 	}
 
-	subscriptionString := `
-*Подписка и баланс*
+	subscriptionString := `*Подписка*`
 
+	if balance.Amount > 0 {
+		subscriptionString += fmt.Sprintf(`
 *Баланс:* %.2f
-*Долг:* %.2f
-%s
+`, balance.Amount)
+	}
 
-Выбери пакет на 1, 3, 6 или 12 месяцев.
-Если баланса не хватит, я подготовлю оплату через YooKassa, а после успешного платежа подписка активируется автоматически.
+	if balance.Debt > 0 {
+		subscriptionString += fmt.Sprintf(`
+*Долг:* %.2f
+`, balance.Debt)
+	}
+
+	subscriptionString += `
+%s
+Выбери подписку на 1, 3, 6 или 12 месяцев.
+Если баланса не хватит, я подготовлю ссылку на онлайн-оплату, а после успешного платежа подписка активируется автоматически.
 `
-	subscriptionString = fmt.Sprintf(subscriptionString, balance.Amount, balance.Debt, getSubscriptionDetails(status))
+
+	subscriptionString = fmt.Sprintf(subscriptionString, getSubscriptionDetails(status))
 	subscriptionString = utils.EscapeMarkdownV2(subscriptionString)
 
 	return c.Send(subscriptionString, &telebot.SendOptions{
@@ -58,11 +68,11 @@ func HandleSendPaymentRequest(c telebot.Context) error {
 		if api.IsMissingUserError(404, err.Error()) {
 			return c.Send(missingUserMessage())
 		}
-		return c.Send("Не получилось загрузить пакеты подписки. Попробуй чуть позже.")
+		return c.Send("Не получилось загрузить доступные подписки. Попробуй чуть позже.")
 	}
 
 	if len(packages) == 0 {
-		return c.Send("Сейчас нет доступных пакетов подписки. Попробуй чуть позже.")
+		return c.Send("Сейчас нет доступных вариантов подписки. Попробуй чуть позже.")
 	}
 
 	return c.Send(getSubscriptionPackagePrompt(packages), getSubscriptionPackageKeyboard(packages))
@@ -71,7 +81,7 @@ func HandleSendPaymentRequest(c telebot.Context) error {
 func HandleChooseSubscriptionPackage(c telebot.Context) error {
 	month, err := parseSubscriptionMonthCallback(callbackData(c.Callback().Data), "choose_subscription_package|")
 	if err != nil {
-		return c.Send("Неверный пакет подписки. Выбери один из доступных вариантов.", getRetrySubscriptionPackageKeyboard())
+		return c.Send("Не удалось найти выбранный вариант подписки. Выбери один из доступных вариантов.", getRetrySubscriptionPackageKeyboard())
 	}
 
 	client := api.NewClient(c)
@@ -80,12 +90,12 @@ func HandleChooseSubscriptionPackage(c telebot.Context) error {
 		if api.IsMissingUserError(404, err.Error()) {
 			return c.Send(missingUserMessage())
 		}
-		return c.Send("Не получилось проверить пакет подписки. Попробуй чуть позже.")
+		return c.Send("Не получилось проверить данный тип подписки. Попробуй чуть позже.")
 	}
 
 	selectedPackage, ok := findSubscriptionPackage(packages, month)
 	if !ok {
-		return c.Send("Неверный пакет подписки. Выбери один из доступных вариантов.", getRetrySubscriptionPackageKeyboard())
+		return c.Send("Не удалось найти выбранный вариант подписки. Выбери один из доступных вариантов.", getRetrySubscriptionPackageKeyboard())
 	}
 
 	return submitSubscriptionPurchase(c, selectedPackage.Month)
@@ -101,7 +111,7 @@ func HandleSubmitPaymentRequest(c telebot.Context) error {
 	if err != nil {
 		btnTryAgain := kb.Data("Повторить", "send_payment_request")
 		kb.Inline(kb.Row(btnTryAgain, btnToStart))
-		return c.Send("Не получилось определить пакет подписки. Попробуй ещё раз.", kb)
+		return c.Send("Не удалось найти выбранный вариант подписки. Попробуй ещё раз.", kb)
 	}
 
 	return submitSubscriptionPurchase(c, month)
@@ -154,14 +164,19 @@ func HandleDepositAction(c telebot.Context) error {
 }
 
 func getSubscriptionPackagePrompt(packages []api.SubscriptionPackage) string {
-	lines := []string{"Доступные пакеты подписки:", ""}
+	lines := []string{"Выбери срок подписки:", ""}
 
 	for _, subscriptionPackage := range packages {
+		subscriptionText := "%s - %d ₽"
+
+		if subscriptionPackage.DiscountPercent > 0 {
+			subscriptionText += fmt.Sprintf(" (скидка %d%%)", subscriptionPackage.DiscountPercent)
+		}
+
 		lines = append(lines, fmt.Sprintf(
-			"%s - %d ₽ (скидка %d%%)",
+			subscriptionText,
 			formatSubscriptionDuration(subscriptionPackage.Month),
 			subscriptionPackage.Price,
-			subscriptionPackage.DiscountPercent,
 		))
 	}
 
@@ -217,7 +232,7 @@ func parseSubscriptionMonthCallback(data string, prefix string) (int, error) {
 
 func getRetrySubscriptionPackageKeyboard() *telebot.ReplyMarkup {
 	kb := &telebot.ReplyMarkup{}
-	btnRetry := kb.Data("Выбрать пакет", "send_payment_request")
+	btnRetry := kb.Data("Выбрать срок подписки", "send_payment_request")
 	btnToStart := kb.Data("К началу", "to_start")
 	kb.Inline(
 		kb.Row(btnRetry),
@@ -283,10 +298,10 @@ func buildSubscriptionPurchaseMessage(response api.PaymentResponse) string {
 		return message + "\n\nНичего дополнительно оплачивать не нужно."
 	case "deposit_required":
 		if message == "" && response.DepositAmount > 0 {
-			message = fmt.Sprintf("Для активации подписки нужно оплатить %s RUB через YooKassa.", formatDepositAmount(response.DepositAmount))
+			message = fmt.Sprintf("Для активации подписки необходимо оплатить %s ₽.", formatDepositAmount(response.DepositAmount))
 		}
 		if message == "" {
-			message = "Для активации подписки нужна оплата через YooKassa."
+			message = "Для активации подписки требуется онлайн-оплата."
 		}
 		return message + "\n\nНажми кнопку ниже. После успешной оплаты подписка активируется автоматически."
 	default:
@@ -314,7 +329,7 @@ func submitSubscriptionPurchase(c telebot.Context, month int) error {
 	}
 
 	if response.Status == "deposit_required" && response.ConfirmationURL != "" {
-		btnPay := telebot.Btn{Text: "Оплатить через YooKassa", URL: response.ConfirmationURL}
+		btnPay := telebot.Btn{Text: "Оплатить онлайн", URL: response.ConfirmationURL}
 		kb.Inline(
 			kb.Row(btnPay),
 			kb.Row(btnToStart),
