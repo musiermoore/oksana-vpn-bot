@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"oksana-vpn-telegram-bot/pkg/api"
 	"strings"
+	"time"
 
 	telebot "gopkg.in/telebot.v4"
 )
@@ -54,7 +55,8 @@ func getSubscriptionDetails(status api.RegistrationStatus) string {
 	details := ""
 
 	if status.ActiveSubscriptionEndDate != nil && strings.TrimSpace(*status.ActiveSubscriptionEndDate) != "" {
-		details += fmt.Sprintf("\nПодписка активна до: %s", *status.ActiveSubscriptionEndDate)
+		date, _ := time.Parse("2006-01-02", *status.ActiveSubscriptionEndDate)
+		details += fmt.Sprintf("\nПодписка активна до: %s", date.Format("02.01.2006"))
 	}
 
 	if !status.HasMoneyForNextSubscriptionMonth {

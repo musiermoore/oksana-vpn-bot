@@ -48,8 +48,8 @@ func HandleSubscription(c telebot.Context) error {
 
 	subscriptionString += `
 %s
-Выбери подписку на 1, 3, 6 или 12 месяцев.
-Если баланса не хватит, я подготовлю ссылку на онлайн-оплату, а после успешного платежа подписка активируется автоматически.
+
+Для активации или продления подписки нажми на "Купить подписку"
 `
 
 	subscriptionString = fmt.Sprintf(subscriptionString, getSubscriptionDetails(status))
@@ -167,17 +167,17 @@ func getSubscriptionPackagePrompt(packages []api.SubscriptionPackage) string {
 	lines := []string{"Выбери срок подписки:", ""}
 
 	for _, subscriptionPackage := range packages {
-		subscriptionText := "%s - %d ₽"
+		subscriptionText := fmt.Sprintf(
+			"%s - %d ₽",
+			formatSubscriptionDuration(subscriptionPackage.Month),
+			subscriptionPackage.Price,
+		)
 
 		if subscriptionPackage.DiscountPercent > 0 {
 			subscriptionText += fmt.Sprintf(" (скидка %d%%)", subscriptionPackage.DiscountPercent)
 		}
 
-		lines = append(lines, fmt.Sprintf(
-			subscriptionText,
-			formatSubscriptionDuration(subscriptionPackage.Month),
-			subscriptionPackage.Price,
-		))
+		lines = append(lines, subscriptionText)
 	}
 
 	return strings.Join(lines, "\n")

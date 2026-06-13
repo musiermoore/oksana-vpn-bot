@@ -456,6 +456,9 @@ func TestHandleSendPaymentRequestShowsBackendPrices(t *testing.T) {
 	if !strings.Contains(ctx.sent[0], "1 месяц - 400 ₽") {
 		t.Fatalf("expected exact package price in message, got %q", ctx.sent[0])
 	}
+	if !strings.Contains(ctx.sent[0], "3 месяца - 1080 ₽ (скидка 10%)") {
+		t.Fatalf("expected discount percent in message, got %q", ctx.sent[0])
+	}
 	if !strings.Contains(ctx.sent[0], "12 месяцев - 3360 ₽") {
 		t.Fatalf("expected full package list in message, got %q", ctx.sent[0])
 	}
