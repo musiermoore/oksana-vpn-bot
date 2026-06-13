@@ -18,11 +18,12 @@ type fakeContext struct {
 	chat         *telebot.Chat
 	msg          *telebot.Message
 	cb           *telebot.Callback
+	bot          telebot.API
 	sent         []string
 	replyMarkups []*telebot.ReplyMarkup
 }
 
-func (f *fakeContext) Bot() telebot.API                                { return nil }
+func (f *fakeContext) Bot() telebot.API                                { return f.bot }
 func (f *fakeContext) Update() telebot.Update                          { return telebot.Update{} }
 func (f *fakeContext) Message() *telebot.Message                       { return f.msg }
 func (f *fakeContext) Callback() *telebot.Callback                     { return f.cb }
@@ -88,6 +89,43 @@ func (f *fakeContext) RespondAlert(text string) error                           
 func (f *fakeContext) Get(key string) interface{}                                { return nil }
 func (f *fakeContext) Set(key string, val interface{})                           {}
 
+type fakeBotAPI struct {
+	telebot.API
+	ctx           *fakeContext
+	nextMessageID int
+}
+
+func (f *fakeBotAPI) Send(to telebot.Recipient, what interface{}, opts ...interface{}) (*telebot.Message, error) {
+	for _, opt := range opts {
+		switch value := opt.(type) {
+		case *telebot.ReplyMarkup:
+			f.ctx.replyMarkups = append(f.ctx.replyMarkups, value)
+		case *telebot.SendOptions:
+			if value != nil && value.ReplyMarkup != nil {
+				f.ctx.replyMarkups = append(f.ctx.replyMarkups, value.ReplyMarkup)
+			}
+		}
+	}
+
+	if text, ok := what.(string); ok {
+		f.ctx.sent = append(f.ctx.sent, text)
+	}
+
+	chat := f.ctx.chat
+	if recipientChat, ok := to.(*telebot.Chat); ok {
+		chat = recipientChat
+	}
+
+	if chat == nil {
+		chat = &telebot.Chat{}
+	}
+
+	return &telebot.Message{
+		ID:   f.nextMessageID,
+		Chat: chat,
+	}, nil
+}
+
 func decodeRequestBody(t *testing.T, r *http.Request) map[string]any {
 	t.Helper()
 
@@ -102,10 +140,17 @@ func decodeRequestBody(t *testing.T, r *http.Request) map[string]any {
 }
 
 func newTestContext() *fakeContext {
-	return &fakeContext{
+	ctx := &fakeContext{
 		sender: &telebot.User{ID: 777, Username: "oksana", FirstName: "Oksana"},
 		chat:   &telebot.Chat{ID: 777},
 	}
+
+	ctx.bot = &fakeBotAPI{
+		ctx:           ctx,
+		nextMessageID: 999,
+	}
+
+	return ctx
 }
 
 func setupAPIEnv(t *testing.T, server *httptest.Server) {
@@ -491,9 +536,38 @@ func TestHandleSubmitPaymentRequestActivatedMessage(t *testing.T) {
 }
 
 func TestHandleSubmitPaymentRequestDepositRequiredMessage(t *testing.T) {
+	var calls []string
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"status":"deposit_required","message":"Для активации подписки необходимо оплатить 520 ₽.","deposit_amount":520.0,"transaction_id":1,"invoice_id":456,"payment_id":"uuid","payment_status":"pending","confirmation_url":"https://pay.example/confirm"}`))
+		calls = append(calls, r.Method+" "+r.URL.Path)
+
+		switch len(calls) {
+		case 1:
+			if r.URL.Path != "/users/777/transactions" {
+				t.Fatalf("unexpected path: %s", r.URL.Path)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"deposit_required","message":"Для активации подписки необходимо оплатить 520 ₽.","deposit_amount":520.0,"transaction_id":1,"invoice_id":456,"payment_id":"uuid","payment_status":"pending","confirmation_url":"https://pay.example/confirm"}`))
+		case 2:
+			if r.URL.Path != "/users/777/transactions/1/telegram-message" {
+				t.Fatalf("unexpected path: %s", r.URL.Path)
+			}
+			if r.Method != http.MethodPatch {
+				t.Fatalf("unexpected method: %s", r.Method)
+			}
+
+			payload := decodeRequestBody(t, r)
+			if payload["telegram_chat_id"] != float64(777) {
+				t.Fatalf("unexpected telegram chat id: %#v", payload["telegram_chat_id"])
+			}
+			if payload["telegram_message_id"] != float64(999) {
+				t.Fatalf("unexpected telegram message id: %#v", payload["telegram_message_id"])
+			}
+
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
 	}))
 	defer server.Close()
 

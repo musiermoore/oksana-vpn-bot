@@ -338,7 +338,24 @@ func submitSubscriptionPurchase(c telebot.Context, month int) error {
 		kb.Inline(kb.Row(btnToStart))
 	}
 
-	return c.Send(buildSubscriptionPurchaseMessage(response), kb)
+	messageText := buildSubscriptionPurchaseMessage(response)
+	bot := c.Bot()
+	if bot == nil {
+		return c.Send(messageText, kb)
+	}
+
+	sentMessage, err := bot.Send(c.Recipient(), messageText, kb)
+	if err != nil {
+		return err
+	}
+
+	if response.TransactionID > 0 && sentMessage != nil && sentMessage.Chat != nil {
+		if err := client.SetTransactionTelegramMessage(response.TransactionID, sentMessage.Chat.ID, sentMessage.ID); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func formatDepositAmount(amount float64) string {

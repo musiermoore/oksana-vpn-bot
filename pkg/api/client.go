@@ -377,6 +377,24 @@ func (c *Client) DeclinePaymentRequest(transactionID string) error {
 	return err
 }
 
+type TransactionTelegramMessageRequest struct {
+	TelegramChatID    int64 `json:"telegram_chat_id"`
+	TelegramMessageID int   `json:"telegram_message_id"`
+}
+
+func (c *Client) SetTransactionTelegramMessage(transactionID int, chatID int64, messageID int) error {
+	_, err := Request(
+		"PATCH",
+		c.userPath(fmt.Sprintf("transactions/%d/telegram-message", transactionID)),
+		TransactionTelegramMessageRequest{
+			TelegramChatID:    chatID,
+			TelegramMessageID: messageID,
+		},
+	)
+
+	return err
+}
+
 type Config struct {
 	ID     int32  `json:"id"`
 	UserID int32  `json:"user_id"`
