@@ -259,6 +259,50 @@ func TestGetVlessSubscriptionLinkParsesJSONLinkPayload(t *testing.T) {
 	}
 }
 
+func TestGetConfigFileReturnsFileNameFromContentDisposition(t *testing.T) {
+	client := withTestAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/users/123/configs/wireguard/7/download" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Content-Disposition", `attachment; filename="wg-iphone.conf"`)
+		_, _ = w.Write([]byte("config-data"))
+	})
+
+	fileData, fileName, apiErr, err := client.GetConfigFile("wireguard", "7")
+	if err != nil {
+		t.Fatalf("GetConfigFile returned error: %v", err)
+	}
+	if apiErr != nil {
+		t.Fatalf("expected nil API error, got: %#v", apiErr)
+	}
+	if string(fileData) != "config-data" {
+		t.Fatalf("unexpected file data: %q", string(fileData))
+	}
+	if fileName != "wg-iphone.conf" {
+		t.Fatalf("unexpected file name: %q", fileName)
+	}
+}
+
+func TestGetConfigFileWithoutContentDispositionReturnsEmptyFileName(t *testing.T) {
+	client := withTestAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("config-data"))
+	})
+
+	_, fileName, apiErr, err := client.GetConfigFile("wireguard", "7")
+	if err != nil {
+		t.Fatalf("GetConfigFile returned error: %v", err)
+	}
+	if apiErr != nil {
+		t.Fatalf("expected nil API error, got: %#v", apiErr)
+	}
+	if fileName != "" {
+		t.Fatalf("expected empty file name, got %q", fileName)
+	}
+}
+
 func TestGetVlessSubscriptionLinkFallsBackToPlainStringResponse(t *testing.T) {
 	client := withTestAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/users/123/vless/link" {

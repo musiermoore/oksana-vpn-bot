@@ -44,6 +44,7 @@ type APIError struct {
 type apiResponse struct {
 	Body        []byte
 	ContentType string
+	ContentDisposition string
 	StatusCode  int
 }
 
@@ -203,9 +204,10 @@ func request(method string, path string, data any, accept string) (apiResponse, 
 	}
 
 	result := apiResponse{
-		Body:        respBody,
-		ContentType: resp.Header.Get("Content-Type"),
-		StatusCode:  resp.StatusCode,
+		Body:               respBody,
+		ContentType:        resp.Header.Get("Content-Type"),
+		ContentDisposition: resp.Header.Get("Content-Disposition"),
+		StatusCode:         resp.StatusCode,
 	}
 
 	if resp.StatusCode >= 400 {
@@ -544,7 +546,7 @@ func (c *Client) GetConfigQrCode(configType, configID string) ([]byte, *ConfigRe
 	return resp.Body, nil, nil
 }
 
-func (c *Client) GetConfigFile(configType, configID string) ([]byte, *ConfigResponse, error) {
+func (c *Client) GetConfigFile(configType, configID string) ([]byte, string, *ConfigResponse, error) {
 	resp, err := request(
 		"GET",
 		c.userPath(fmt.Sprintf("configs/%s/%s/download", configType, configID)),
@@ -554,22 +556,37 @@ func (c *Client) GetConfigFile(configType, configID string) ([]byte, *ConfigResp
 	if err != nil {
 		data, _, parseErr := parseConfigAPIError(resp, err)
 		if data != nil {
-			return nil, data, parseErr
+			return nil, "", data, parseErr
 		}
-		return nil, nil, err
+		return nil, "", nil, err
 	}
 
 	// Try to detect if the response is JSON (error) or file (success)
 	if len(resp.Body) > 0 && resp.Body[0] == '{' {
 		data, err := parseConfigResponse(resp.Body)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to parse JSON: %w", err)
+			return nil, "", nil, fmt.Errorf("failed to parse JSON: %w", err)
 		}
-		return nil, &data, fmt.Errorf("api returned error: %s", data.Message)
+		return nil, "", &data, fmt.Errorf("api returned error: %s", data.Message)
 	}
 
+	fileName, _ := fileNameFromContentDisposition(resp.ContentDisposition)
+
 	// Otherwise, assume it's the file bytes
-	return resp.Body, nil, nil
+	return resp.Body, fileName, nil, nil
+}
+
+func fileNameFromContentDisposition(contentDisposition string) (string, error) {
+	if strings.TrimSpace(contentDisposition) == "" {
+		return "", nil
+	}
+
+	_, params, err := mime.ParseMediaType(contentDisposition)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(params["filename"]), nil
 }
 
 func (c *Client) GetLink(configType, config string) (string, *ConfigResponse, error) {

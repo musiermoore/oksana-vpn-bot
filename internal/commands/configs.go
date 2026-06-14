@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"oksana-vpn-telegram-bot/pkg/api"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -181,6 +182,18 @@ func sanitizeConfigFileName(name string) string {
 	return re.ReplaceAllString(name, "")
 }
 
+func resolveDownloadFileName(serverFileName, configName string) string {
+	serverFileName = strings.TrimSpace(serverFileName)
+	if serverFileName != "" {
+		baseName := filepath.Base(serverFileName)
+		if baseName != "." && baseName != string(filepath.Separator) && baseName != "" {
+			return baseName
+		}
+	}
+
+	return sanitizeConfigFileName(configName) + ".conf"
+}
+
 func HandleDownloadConfig(c telebot.Context) error {
 	client := api.NewClient(c)
 	configType := getConfigType(c)
@@ -188,7 +201,7 @@ func HandleDownloadConfig(c telebot.Context) error {
 	configName := lookupConfigName(c, configType, configID)
 	kb := getActionConfigKeyboard(configType)
 
-	fileData, apiError, err := client.GetConfigFile(configType, configID)
+	fileData, fileName, apiError, err := client.GetConfigFile(configType, configID)
 	if err != nil {
 		if apiError != nil {
 			fmt.Println("API error:", apiError.Message)
@@ -205,7 +218,7 @@ func HandleDownloadConfig(c telebot.Context) error {
 		File: telebot.File{
 			FileReader: bytes.NewReader(fileData),
 		},
-		FileName: sanitizeConfigFileName(configName) + ".conf",
+		FileName: resolveDownloadFileName(fileName, configName),
 		Caption:  "Вот твой конфиг 😽",
 	}
 

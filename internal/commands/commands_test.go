@@ -20,6 +20,7 @@ type fakeContext struct {
 	cb           *telebot.Callback
 	bot          telebot.API
 	sent         []string
+	documents    []*telebot.Document
 	replyMarkups []*telebot.ReplyMarkup
 }
 
@@ -63,6 +64,12 @@ func (f *fakeContext) Send(what interface{}, opts ...interface{}) error {
 
 	if text, ok := what.(string); ok {
 		f.sent = append(f.sent, text)
+		return nil
+	}
+
+	if document, ok := what.(*telebot.Document); ok {
+		f.documents = append(f.documents, document)
+		f.sent = append(f.sent, "")
 		return nil
 	}
 
@@ -419,6 +426,71 @@ func TestHandleChoosingConfigBuildsCompactActionButtonsAndResolvesName(t *testin
 	}
 	if got := ctx.replyMarkups[0].InlineKeyboard[0][1].Unique; got != "action_config_file|wireguard|571" {
 		t.Fatalf("unexpected file callback data: %q", got)
+	}
+}
+
+func TestHandleDownloadConfigUsesServerFileNameFromContentDisposition(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/users/777/configs/wireguard":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":{"configs":[{"id":571,"name":"My iPhone"}]}}`))
+		case "/users/777/configs/wireguard/571/download":
+			w.Header().Set("Content-Type", "text/plain")
+			w.Header().Set("Content-Disposition", `attachment; filename="server-name.conf"`)
+			_, _ = w.Write([]byte("config-data"))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	setupAPIEnv(t, server)
+
+	ctx := newTestContext()
+	ctx.cb = &telebot.Callback{Data: "\faction_config_file|wireguard|571"}
+
+	if err := HandleDownloadConfig(ctx); err != nil {
+		t.Fatalf("HandleDownloadConfig returned error: %v", err)
+	}
+
+	if len(ctx.documents) != 1 {
+		t.Fatalf("expected 1 document, got %d", len(ctx.documents))
+	}
+	if ctx.documents[0].FileName != "server-name.conf" {
+		t.Fatalf("unexpected document filename: %q", ctx.documents[0].FileName)
+	}
+}
+
+func TestHandleDownloadConfigFallsBackToGeneratedFileName(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/users/777/configs/wireguard":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"data":{"configs":[{"id":571,"name":"My iPhone #1"}]}}`))
+		case "/users/777/configs/wireguard/571/download":
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("config-data"))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	setupAPIEnv(t, server)
+
+	ctx := newTestContext()
+	ctx.cb = &telebot.Callback{Data: "\faction_config_file|wireguard|571"}
+
+	if err := HandleDownloadConfig(ctx); err != nil {
+		t.Fatalf("HandleDownloadConfig returned error: %v", err)
+	}
+
+	if len(ctx.documents) != 1 {
+		t.Fatalf("expected 1 document, got %d", len(ctx.documents))
+	}
+	if ctx.documents[0].FileName != "MyiPhone1.conf" {
+		t.Fatalf("unexpected fallback filename: %q", ctx.documents[0].FileName)
 	}
 }
 
