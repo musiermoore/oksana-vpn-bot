@@ -120,13 +120,14 @@ func TestGetBalanceParsesWrappedAmountPayload(t *testing.T) {
 
 func TestGetRegistrationStatusParsesResourceAttributesPayload(t *testing.T) {
 	endDate := "2026-06-01"
+	welcomeText := "Добро пожаловать в Oksana VPN"
 	client := withTestAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/users/123/registration-status" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":{"attributes":{"registered":true,"active_subscription_end_date":"` + endDate + `","has_money_for_next_subscription_month":true}}}`))
+		_, _ = w.Write([]byte(`{"data":{"attributes":{"registered":true,"active_subscription_end_date":"` + endDate + `","has_money_for_next_subscription_month":true,"welcome_text":"` + welcomeText + `"}}}`))
 	})
 
 	status, err := client.GetRegistrationStatus()
@@ -134,7 +135,7 @@ func TestGetRegistrationStatusParsesResourceAttributesPayload(t *testing.T) {
 		t.Fatalf("GetRegistrationStatus returned error: %v", err)
 	}
 
-	if !status.Registered || status.ActiveSubscriptionEndDate == nil || *status.ActiveSubscriptionEndDate != endDate || !status.HasMoneyForNextSubscriptionMonth {
+	if !status.Registered || status.ActiveSubscriptionEndDate == nil || *status.ActiveSubscriptionEndDate != endDate || !status.HasMoneyForNextSubscriptionMonth || status.WelcomeText != welcomeText {
 		t.Fatalf("unexpected registration status: %#v", status)
 	}
 }

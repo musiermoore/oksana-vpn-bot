@@ -42,10 +42,10 @@ type APIError struct {
 }
 
 type apiResponse struct {
-	Body        []byte
-	ContentType string
+	Body               []byte
+	ContentType        string
 	ContentDisposition string
-	StatusCode  int
+	StatusCode         int
 }
 
 func NewClient(context telebot.Context) *Client {
@@ -88,6 +88,7 @@ type RegistrationStatus struct {
 	Registered                       bool    `json:"registered"`
 	ActiveSubscriptionEndDate        *string `json:"active_subscription_end_date"`
 	HasMoneyForNextSubscriptionMonth bool    `json:"has_money_for_next_subscription_month"`
+	WelcomeText                      string  `json:"welcome_text"`
 }
 
 func (r *RegistrationStatus) UnmarshalJSON(data []byte) error {
@@ -95,10 +96,12 @@ func (r *RegistrationStatus) UnmarshalJSON(data []byte) error {
 		Registered                       bool    `json:"registered"`
 		ActiveSubscriptionEndDate        *string `json:"active_subscription_end_date"`
 		HasMoneyForNextSubscriptionMonth bool    `json:"has_money_for_next_subscription_month"`
+		WelcomeText                      string  `json:"welcome_text"`
 		Attributes                       struct {
 			Registered                       bool    `json:"registered"`
 			ActiveSubscriptionEndDate        *string `json:"active_subscription_end_date"`
 			HasMoneyForNextSubscriptionMonth bool    `json:"has_money_for_next_subscription_month"`
+			WelcomeText                      string  `json:"welcome_text"`
 		} `json:"attributes"`
 	}
 
@@ -113,6 +116,11 @@ func (r *RegistrationStatus) UnmarshalJSON(data []byte) error {
 		r.ActiveSubscriptionEndDate = payload.Attributes.ActiveSubscriptionEndDate
 	}
 	r.HasMoneyForNextSubscriptionMonth = payload.HasMoneyForNextSubscriptionMonth || payload.Attributes.HasMoneyForNextSubscriptionMonth
+	if payload.WelcomeText != "" {
+		r.WelcomeText = payload.WelcomeText
+	} else {
+		r.WelcomeText = payload.Attributes.WelcomeText
+	}
 
 	return nil
 }

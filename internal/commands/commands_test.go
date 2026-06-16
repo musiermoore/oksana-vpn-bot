@@ -170,6 +170,7 @@ func setupAPIEnv(t *testing.T, server *httptest.Server) {
 
 func TestShowStartMenuRegistersMissingUser(t *testing.T) {
 	var calls []string
+	welcomeText := "Привет из админки"
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls = append(calls, r.Method+" "+r.URL.Path)
@@ -194,7 +195,7 @@ func TestShowStartMenuRegistersMissingUser(t *testing.T) {
 				t.Fatalf("unexpected third path: %s", r.URL.Path)
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"data":{"registered":true,"has_money_for_next_subscription_month":true}}`))
+			_, _ = w.Write([]byte(`{"data":{"registered":true,"has_money_for_next_subscription_month":true,"welcome_text":"` + welcomeText + `"}}`))
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 		}
@@ -211,7 +212,7 @@ func TestShowStartMenuRegistersMissingUser(t *testing.T) {
 	if len(ctx.sent) != 1 {
 		t.Fatalf("expected 1 sent message, got %d", len(ctx.sent))
 	}
-	if ctx.sent[0] != "Привет! Я помогу с подпиской и настройкой VPN.\n\nВыбери раздел:" {
+	if ctx.sent[0] != welcomeText {
 		t.Fatalf("unexpected start message: %q", ctx.sent[0])
 	}
 }
@@ -239,6 +240,29 @@ func TestShowStartMenuForRegisteredUserSkipsRegistration(t *testing.T) {
 	if calls != 1 {
 		t.Fatalf("expected 1 API call, got %d", calls)
 	}
+	if len(ctx.sent) != 1 || ctx.sent[0] != "Привет! Я помогу с подпиской и настройкой VPN.\n\nВыбери раздел:" {
+		t.Fatalf("unexpected messages: %#v", ctx.sent)
+	}
+}
+
+func TestShowStartMenuFallsBackToDefaultWelcomeText(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/users/777/registration-status" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"registered":true,"has_money_for_next_subscription_month":true,"welcome_text":"   "}}`))
+	}))
+	defer server.Close()
+
+	setupAPIEnv(t, server)
+
+	ctx := newTestContext()
+	if err := showStartMenu(ctx); err != nil {
+		t.Fatalf("showStartMenu returned error: %v", err)
+	}
+
 	if len(ctx.sent) != 1 || ctx.sent[0] != "Привет! Я помогу с подпиской и настройкой VPN.\n\nВыбери раздел:" {
 		t.Fatalf("unexpected messages: %#v", ctx.sent)
 	}

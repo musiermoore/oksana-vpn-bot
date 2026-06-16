@@ -67,7 +67,12 @@ func getSubscriptionDetails(status api.RegistrationStatus) string {
 }
 
 func getStartMessage(status api.RegistrationStatus) string {
-	return "Привет! Я помогу с подпиской и настройкой VPN.\n\nВыбери раздел:" + getTopUpReminder(status)
+	message := strings.TrimSpace(status.WelcomeText)
+	if message == "" {
+		message = "Привет! Я помогу с подпиской и настройкой VPN.\n\nВыбери раздел:"
+	}
+
+	return message + getTopUpReminder(status)
 }
 
 func ensureRegistered(c telebot.Context) (api.RegistrationStatus, error) {
