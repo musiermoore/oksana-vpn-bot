@@ -22,6 +22,7 @@ type fakeContext struct {
 	sent         []string
 	documents    []*telebot.Document
 	replyMarkups []*telebot.ReplyMarkup
+	parseModes   []telebot.ParseMode
 }
 
 func (f *fakeContext) Bot() telebot.API                                { return f.bot }
@@ -58,6 +59,9 @@ func (f *fakeContext) Send(what interface{}, opts ...interface{}) error {
 		case *telebot.SendOptions:
 			if value != nil && value.ReplyMarkup != nil {
 				f.replyMarkups = append(f.replyMarkups, value.ReplyMarkup)
+			}
+			if value != nil {
+				f.parseModes = append(f.parseModes, value.ParseMode)
 			}
 		}
 	}
@@ -110,6 +114,9 @@ func (f *fakeBotAPI) Send(to telebot.Recipient, what interface{}, opts ...interf
 		case *telebot.SendOptions:
 			if value != nil && value.ReplyMarkup != nil {
 				f.ctx.replyMarkups = append(f.ctx.replyMarkups, value.ReplyMarkup)
+			}
+			if value != nil {
+				f.ctx.parseModes = append(f.ctx.parseModes, value.ParseMode)
 			}
 		}
 	}
@@ -215,6 +222,9 @@ func TestShowStartMenuRegistersMissingUser(t *testing.T) {
 	if ctx.sent[0] != welcomeText {
 		t.Fatalf("unexpected start message: %q", ctx.sent[0])
 	}
+	if len(ctx.parseModes) != 1 || ctx.parseModes[0] != telebot.ModeHTML {
+		t.Fatalf("unexpected parse modes: %#v", ctx.parseModes)
+	}
 }
 
 func TestShowStartMenuForRegisteredUserSkipsRegistration(t *testing.T) {
@@ -240,8 +250,11 @@ func TestShowStartMenuForRegisteredUserSkipsRegistration(t *testing.T) {
 	if calls != 1 {
 		t.Fatalf("expected 1 API call, got %d", calls)
 	}
-	if len(ctx.sent) != 1 || ctx.sent[0] != "Привет! Я помогу с подпиской и настройкой VPN.\n\nВыбери раздел:" {
+	if len(ctx.sent) != 1 || ctx.sent[0] != "👋 Добро пожаловать в <b>OksanaVPN</b>!\n\nВыберите нужное действие в меню ниже и начните пользоваться VPN уже через пару минут 🚀" {
 		t.Fatalf("unexpected messages: %#v", ctx.sent)
+	}
+	if len(ctx.parseModes) != 1 || ctx.parseModes[0] != telebot.ModeHTML {
+		t.Fatalf("unexpected parse modes: %#v", ctx.parseModes)
 	}
 }
 
@@ -263,8 +276,11 @@ func TestShowStartMenuFallsBackToDefaultWelcomeText(t *testing.T) {
 		t.Fatalf("showStartMenu returned error: %v", err)
 	}
 
-	if len(ctx.sent) != 1 || ctx.sent[0] != "Привет! Я помогу с подпиской и настройкой VPN.\n\nВыбери раздел:" {
+	if len(ctx.sent) != 1 || ctx.sent[0] != "👋 Добро пожаловать в <b>OksanaVPN</b>!\n\nВыберите нужное действие в меню ниже и начните пользоваться VPN уже через пару минут 🚀" {
 		t.Fatalf("unexpected messages: %#v", ctx.sent)
+	}
+	if len(ctx.parseModes) != 1 || ctx.parseModes[0] != telebot.ModeHTML {
+		t.Fatalf("unexpected parse modes: %#v", ctx.parseModes)
 	}
 }
 

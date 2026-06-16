@@ -69,7 +69,7 @@ func getSubscriptionDetails(status api.RegistrationStatus) string {
 func getStartMessage(status api.RegistrationStatus) string {
 	message := strings.TrimSpace(status.WelcomeText)
 	if message == "" {
-		message = "Привет! Я помогу с подпиской и настройкой VPN.\n\nВыбери раздел:"
+		message = "👋 Добро пожаловать в <b>OksanaVPN</b>!\n\nВыберите нужное действие в меню ниже и начните пользоваться VPN уже через пару минут 🚀"
 	}
 
 	return message + getTopUpReminder(status)
@@ -106,7 +106,10 @@ func showStartMenu(c telebot.Context) error {
 		return c.Send("Не получилось начать работу. Попробуй чуть позже.")
 	}
 
-	return c.Send(getStartMessage(status), getMainMenu())
+	return c.Send(getStartMessage(status), &telebot.SendOptions{
+		ParseMode:   telebot.ModeHTML,
+		ReplyMarkup: getMainMenu(),
+	})
 }
 
 func HandleRegisterCommand(c telebot.Context) error {
