@@ -762,6 +762,9 @@ func TestHandleSubmitPaymentRequestDepositRequiredMessage(t *testing.T) {
 	if !strings.Contains(ctx.sent[0], "Для активации подписки необходимо оплатить 520 ₽.") {
 		t.Fatalf("unexpected deposit-required message: %q", ctx.sent[0])
 	}
+	if !strings.Contains(ctx.sent[0], "Чтобы перейти к оплате нажмите на кнопку \"Перейти к оплате картой / СБП\".") {
+		t.Fatalf("expected payment button hint, got %q", ctx.sent[0])
+	}
 	if !strings.Contains(ctx.sent[0], "После успешной оплаты подписка активируется автоматически.") {
 		t.Fatalf("expected auto-activation explanation, got %q", ctx.sent[0])
 	}
@@ -771,7 +774,7 @@ func TestHandleSubmitPaymentRequestDepositRequiredMessage(t *testing.T) {
 	if len(ctx.replyMarkups[0].InlineKeyboard) == 0 || len(ctx.replyMarkups[0].InlineKeyboard[0]) == 0 {
 		t.Fatalf("expected payment button, got %#v", ctx.replyMarkups[0])
 	}
-	if ctx.replyMarkups[0].InlineKeyboard[0][0].Text != "Оплатить онлайн" {
+	if ctx.replyMarkups[0].InlineKeyboard[0][0].Text != "Перейти к оплате картой / СБП" {
 		t.Fatalf("unexpected payment button text: %#v", ctx.replyMarkups[0].InlineKeyboard[0][0])
 	}
 	if ctx.replyMarkups[0].InlineKeyboard[0][0].URL != "https://pay.example/confirm" {
@@ -798,6 +801,9 @@ func TestBuildSubscriptionPurchaseMessageFormatsDepositAmount(t *testing.T) {
 
 	if !strings.Contains(message, "оплатить 520 ₽.") {
 		t.Fatalf("expected formatted deposit amount in message, got %q", message)
+	}
+	if !strings.Contains(message, "Чтобы перейти к оплате нажмите на кнопку \"Перейти к оплате картой / СБП\".") {
+		t.Fatalf("expected payment button hint in message, got %q", message)
 	}
 }
 

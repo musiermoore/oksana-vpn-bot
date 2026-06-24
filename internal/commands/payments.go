@@ -301,9 +301,9 @@ func buildSubscriptionPurchaseMessage(response api.PaymentResponse) string {
 			message = fmt.Sprintf("Для активации подписки необходимо оплатить %s ₽.", formatDepositAmount(response.DepositAmount))
 		}
 		if message == "" {
-			message = "Для активации подписки требуется онлайн-оплата."
+			message = "Для активации подписки нужно перейти к оплате картой / СБП."
 		}
-		return message + "\n\nНажми кнопку ниже. После успешной оплаты подписка активируется автоматически."
+		return message + "\n\nЧтобы перейти к оплате нажмите на кнопку \"Перейти к оплате картой / СБП\". После успешной оплаты подписка активируется автоматически."
 	default:
 		if message == "" {
 			return "Извини, сейчас не получилось обработать запрос. Попробуй чуть позже."
@@ -329,7 +329,7 @@ func submitSubscriptionPurchase(c telebot.Context, month int) error {
 	}
 
 	if response.Status == "deposit_required" && response.ConfirmationURL != "" {
-		btnPay := telebot.Btn{Text: "Оплатить онлайн", URL: response.ConfirmationURL}
+		btnPay := telebot.Btn{Text: "Перейти к оплате картой / СБП", URL: response.ConfirmationURL}
 		kb.Inline(
 			kb.Row(btnPay),
 			kb.Row(btnToStart),
