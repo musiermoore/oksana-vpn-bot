@@ -167,11 +167,7 @@ func getSubscriptionPackagePrompt(packages []api.SubscriptionPackage) string {
 	lines := []string{"Выбери срок подписки:", ""}
 
 	for _, subscriptionPackage := range packages {
-		subscriptionText := fmt.Sprintf(
-			"%s - %d ₽",
-			formatSubscriptionDuration(subscriptionPackage.Month),
-			subscriptionPackage.Price,
-		)
+		subscriptionText := formatSubscriptionPackageLabel(subscriptionPackage)
 
 		if subscriptionPackage.DiscountPercent > 0 {
 			subscriptionText += fmt.Sprintf(" (скидка %d%%)", subscriptionPackage.DiscountPercent)
@@ -191,14 +187,14 @@ func getSubscriptionPackageKeyboard(packages []api.SubscriptionPackage) *telebot
 	for i := 0; i < len(packages); i += 2 {
 		buttons := []telebot.Btn{
 			kb.Data(
-				fmt.Sprintf("%s - %d ₽", formatSubscriptionDuration(packages[i].Month), packages[i].Price),
+				formatSubscriptionPackageLabel(packages[i]),
 				fmt.Sprintf("submit_payment_request|%d", packages[i].Month),
 			),
 		}
 
 		if i+1 < len(packages) {
 			buttons = append(buttons, kb.Data(
-				fmt.Sprintf("%s - %d ₽", formatSubscriptionDuration(packages[i+1].Month), packages[i+1].Price),
+				formatSubscriptionPackageLabel(packages[i+1]),
 				fmt.Sprintf("submit_payment_request|%d", packages[i+1].Month),
 			))
 		}
@@ -223,7 +219,7 @@ func parseSubscriptionMonthCallback(data string, prefix string) (int, error) {
 		return 0, err
 	}
 
-	if month <= 0 {
+	if month < 0 {
 		return 0, fmt.Errorf("unsupported month")
 	}
 
@@ -252,11 +248,27 @@ func parseSubscriptionSubmitCallback(data string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if month <= 0 {
+	if month < 0 {
 		return 0, fmt.Errorf("unsupported month")
 	}
 
 	return month, nil
+}
+
+func formatSubscriptionPackageLabel(subscriptionPackage api.SubscriptionPackage) string {
+	if subscriptionPackage.IsTrial {
+		return fmt.Sprintf(
+			"%s - %s",
+			formatTrialDuration(subscriptionPackage.Days),
+			formatSubscriptionPrice(subscriptionPackage.Price),
+		)
+	}
+
+	return fmt.Sprintf(
+		"%s - %s",
+		formatSubscriptionDuration(subscriptionPackage.Month),
+		formatSubscriptionPrice(subscriptionPackage.Price),
+	)
 }
 
 func formatSubscriptionDuration(month int) string {
@@ -272,6 +284,25 @@ func formatSubscriptionDuration(month int) string {
 	default:
 		return fmt.Sprintf("%d мес.", month)
 	}
+}
+
+func formatTrialDuration(days int) string {
+	switch days {
+	case 1:
+		return "Пробная на 1 день"
+	case 2, 3, 4:
+		return fmt.Sprintf("Пробная на %d дня", days)
+	default:
+		return fmt.Sprintf("Пробная на %d дней", days)
+	}
+}
+
+func formatSubscriptionPrice(price int) string {
+	if price == 0 {
+		return "Бесплатно"
+	}
+
+	return fmt.Sprintf("%d ₽", price)
 }
 
 func findSubscriptionPackage(packages []api.SubscriptionPackage, month int) (api.SubscriptionPackage, bool) {

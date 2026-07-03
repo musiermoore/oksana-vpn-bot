@@ -231,9 +231,11 @@ type Balance struct {
 }
 
 type SubscriptionPackage struct {
-	Month           int `json:"month"`
-	Price           int `json:"price"`
-	DiscountPercent int `json:"discount_percent"`
+	Month           int  `json:"month"`
+	Days            int  `json:"days"`
+	Price           int  `json:"price"`
+	DiscountPercent int  `json:"discount_percent"`
+	IsTrial         bool `json:"is_trial"`
 }
 
 func (c *Client) GetBalance() (Balance, error) {

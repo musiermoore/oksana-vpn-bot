@@ -581,20 +581,24 @@ func TestHandleSubscriptionWithWrappedAPIResponses(t *testing.T) {
 
 func TestGetSubscriptionPackageKeyboardContainsExpectedButtons(t *testing.T) {
 	kb := getSubscriptionPackageKeyboard([]api.SubscriptionPackage{
+		{Month: 0, Days: 2, Price: 0, DiscountPercent: 0, IsTrial: true},
 		{Month: 1, Price: 400, DiscountPercent: 0},
 		{Month: 3, Price: 1080, DiscountPercent: 10},
 		{Month: 6, Price: 1920, DiscountPercent: 20},
 		{Month: 12, Price: 3360, DiscountPercent: 30},
 	})
 
-	if len(kb.InlineKeyboard) != 3 {
-		t.Fatalf("expected 3 rows, got %d", len(kb.InlineKeyboard))
+	if len(kb.InlineKeyboard) != 4 {
+		t.Fatalf("expected 4 rows, got %d", len(kb.InlineKeyboard))
 	}
-	if kb.InlineKeyboard[0][0].Text != "1 месяц - 400 ₽" || kb.InlineKeyboard[0][0].Unique != "submit_payment_request|1" {
+	if kb.InlineKeyboard[0][0].Text != "Пробная на 2 дня - Бесплатно" || kb.InlineKeyboard[0][0].Unique != "submit_payment_request|0" {
 		t.Fatalf("unexpected first package button: %#v", kb.InlineKeyboard[0][0])
 	}
-	if kb.InlineKeyboard[1][1].Text != "12 месяцев - 3360 ₽" || kb.InlineKeyboard[1][1].Unique != "submit_payment_request|12" {
-		t.Fatalf("unexpected last package button: %#v", kb.InlineKeyboard[1][1])
+	if kb.InlineKeyboard[0][1].Text != "1 месяц - 400 ₽" || kb.InlineKeyboard[0][1].Unique != "submit_payment_request|1" {
+		t.Fatalf("unexpected second package button: %#v", kb.InlineKeyboard[0][1])
+	}
+	if kb.InlineKeyboard[2][0].Text != "12 месяцев - 3360 ₽" || kb.InlineKeyboard[2][0].Unique != "submit_payment_request|12" {
+		t.Fatalf("unexpected last package button: %#v", kb.InlineKeyboard[2][0])
 	}
 }
 
@@ -607,6 +611,7 @@ func TestHandleSendPaymentRequestShowsBackendPrices(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
 			"data": [
+				{"month": 0, "days": 2, "price": 0, "discount_percent": 0, "is_trial": true},
 				{"month": 1, "price": 400, "discount_percent": 0},
 				{"month": 3, "price": 1080, "discount_percent": 10},
 				{"month": 6, "price": 1920, "discount_percent": 20},
@@ -626,6 +631,9 @@ func TestHandleSendPaymentRequestShowsBackendPrices(t *testing.T) {
 	if len(ctx.sent) != 1 {
 		t.Fatalf("expected 1 sent message, got %d", len(ctx.sent))
 	}
+	if !strings.Contains(ctx.sent[0], "Пробная на 2 дня - Бесплатно") {
+		t.Fatalf("expected trial package in message, got %q", ctx.sent[0])
+	}
 	if !strings.Contains(ctx.sent[0], "1 месяц - 400 ₽") {
 		t.Fatalf("expected exact package price in message, got %q", ctx.sent[0])
 	}
@@ -634,6 +642,87 @@ func TestHandleSendPaymentRequestShowsBackendPrices(t *testing.T) {
 	}
 	if !strings.Contains(ctx.sent[0], "12 месяцев - 3360 ₽") {
 		t.Fatalf("expected full package list in message, got %q", ctx.sent[0])
+	}
+}
+
+func TestHandleChooseSubscriptionPackageAcceptsTrialMonth(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/users/777/subscription-packages":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{
+				"data": [
+					{"month": 0, "days": 2, "price": 0, "discount_percent": 0, "is_trial": true},
+					{"month": 1, "price": 400, "discount_percent": 0}
+				]
+			}`))
+		case "/users/777/transactions":
+			payload := decodeRequestBody(t, r)
+			if payload["month"] != float64(0) {
+				t.Fatalf("unexpected month payload: %#v", payload["month"])
+			}
+			if payload["bank"] != "tbank" {
+				t.Fatalf("unexpected bank payload: %#v", payload["bank"])
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"activated","message":"Пробная подписка активирована.","end_date":"2026-07-05","formatted_end_date":"05.07.2026"}`))
+		default:
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	setupAPIEnv(t, server)
+
+	ctx := newTestContext()
+	ctx.cb = &telebot.Callback{Data: "choose_subscription_package|0"}
+
+	if err := HandleChooseSubscriptionPackage(ctx); err != nil {
+		t.Fatalf("HandleChooseSubscriptionPackage returned error: %v", err)
+	}
+
+	if len(ctx.sent) != 1 {
+		t.Fatalf("expected 1 sent message, got %d", len(ctx.sent))
+	}
+	if !strings.Contains(ctx.sent[0], "Пробная подписка активирована.") {
+		t.Fatalf("unexpected message: %q", ctx.sent[0])
+	}
+}
+
+func TestHandleSubmitPaymentRequestAcceptsTrialMonth(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/users/777/transactions" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+
+		payload := decodeRequestBody(t, r)
+		if payload["month"] != float64(0) {
+			t.Fatalf("unexpected month payload: %#v", payload["month"])
+		}
+		if payload["bank"] != "tbank" {
+			t.Fatalf("unexpected bank payload: %#v", payload["bank"])
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"activated","message":"Пробная подписка активирована.","end_date":"2026-07-05","formatted_end_date":"05.07.2026"}`))
+	}))
+	defer server.Close()
+
+	setupAPIEnv(t, server)
+
+	ctx := newTestContext()
+	ctx.cb = &telebot.Callback{Data: "submit_payment_request|0"}
+
+	if err := HandleSubmitPaymentRequest(ctx); err != nil {
+		t.Fatalf("HandleSubmitPaymentRequest returned error: %v", err)
+	}
+
+	if len(ctx.sent) != 1 {
+		t.Fatalf("expected 1 sent message, got %d", len(ctx.sent))
+	}
+	if !strings.Contains(ctx.sent[0], "Пробная подписка активирована.") {
+		t.Fatalf("unexpected message: %q", ctx.sent[0])
 	}
 }
 

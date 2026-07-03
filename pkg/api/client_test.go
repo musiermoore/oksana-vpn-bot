@@ -208,6 +208,7 @@ func TestGetSubscriptionPackagesParsesPricingPayload(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
 			"data": [
+				{"month": 0, "days": 2, "price": 0, "discount_percent": 0, "is_trial": true},
 				{"month": 12, "price": 3360, "discount_percent": 30},
 				{"month": 1, "price": 400, "discount_percent": 0},
 				{"month": 6, "price": 1920, "discount_percent": 20},
@@ -221,14 +222,17 @@ func TestGetSubscriptionPackagesParsesPricingPayload(t *testing.T) {
 		t.Fatalf("GetSubscriptionPackages returned error: %v", err)
 	}
 
-	if len(packages) != 4 {
-		t.Fatalf("expected 4 packages, got %d", len(packages))
+	if len(packages) != 5 {
+		t.Fatalf("expected 5 packages, got %d", len(packages))
 	}
-	if packages[0].Month != 1 || packages[0].Price != 400 || packages[0].DiscountPercent != 0 {
+	if packages[0].Month != 0 || packages[0].Days != 2 || packages[0].Price != 0 || !packages[0].IsTrial {
 		t.Fatalf("unexpected first package: %#v", packages[0])
 	}
-	if packages[3].Month != 12 || packages[3].Price != 3360 || packages[3].DiscountPercent != 30 {
-		t.Fatalf("unexpected last package: %#v", packages[3])
+	if packages[1].Month != 1 || packages[1].Price != 400 || packages[1].DiscountPercent != 0 {
+		t.Fatalf("unexpected second package: %#v", packages[1])
+	}
+	if packages[4].Month != 12 || packages[4].Price != 3360 || packages[4].DiscountPercent != 30 {
+		t.Fatalf("unexpected last package: %#v", packages[4])
 	}
 }
 
