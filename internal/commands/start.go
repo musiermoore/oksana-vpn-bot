@@ -1,50 +1,21 @@
 package commands
 
-import (
-	_ "embed"
-	"fmt"
-	"oksana-vpn-telegram-bot/pkg/api"
-	"strings"
-	"time"
+import telebot "gopkg.in/telebot.v4"
 
-	telebot "gopkg.in/telebot.v4"
-)
+func getStartKeyboard() *telebot.ReplyMarkup {
+	kb := &telebot.ReplyMarkup{}
 
-//go:embed help_wg.txt
-var helpWGText string
+	btnSite := kb.URL("Сайт", "https://oksana1984.ru")
+	btnNews := kb.URL("Новости", "https://t.me/+DfexxpJzKiFkNzQ6")
+	btnChat := kb.URL("Чат", "https://t.me/+jG8T4yBk0tg4MWNi")
 
-//go:embed help_vless.txt
-var helpVLESSText string
-
-func getMainMenu() *telebot.ReplyMarkup {
-	menu := &telebot.ReplyMarkup{}
-
-	btnSite := menu.URL("Сайт", "https://oksana1984.ru")
-	btnNews := menu.URL("Новости", "https://t.me/+DfexxpJzKiFkNzQ6")
-	btnChat := menu.URL("Чат", "https://t.me/+jG8T4yBk0tg4MWNi")
-
-	menu.Inline(
-		menu.Row(btnSite),
-		menu.Row(btnNews),
-		menu.Row(btnChat),
+	kb.Inline(
+		kb.Row(btnSite),
+		kb.Row(btnNews),
+		kb.Row(btnChat),
 	)
 
-	return menu
-}
-
-func getSubscriptionDetails(status api.RegistrationStatus) string {
-	details := ""
-
-	if status.ActiveSubscriptionEndDate != nil && strings.TrimSpace(*status.ActiveSubscriptionEndDate) != "" {
-		date, _ := time.Parse("2006-01-02", *status.ActiveSubscriptionEndDate)
-		details += fmt.Sprintf("\nПодписка активна до: %s", date.Format("02.01.2006"))
-	}
-
-	if !status.HasMoneyForNextSubscriptionMonth {
-		details += "\n\nНапоминание: баланса сейчас не хватает на следующий месяц подписки."
-	}
-
-	return details
+	return kb
 }
 
 func getStartMessage() string {
@@ -54,157 +25,6 @@ func getStartMessage() string {
 func showStartMenu(c telebot.Context) error {
 	return c.Send(getStartMessage(), &telebot.SendOptions{
 		ParseMode:   telebot.ModeHTML,
-		ReplyMarkup: getMainMenu(),
+		ReplyMarkup: getStartKeyboard(),
 	})
-}
-
-func getHelpMenuKeyboard() *telebot.ReplyMarkup {
-	kb := &telebot.ReplyMarkup{}
-
-	btnWG := kb.Data("WG", "help|wg")
-	btnVLESS := kb.Data("VLESS", "help|vless")
-	btnClients := kb.Data("Клиенты", "help|clients")
-	btnToStart := kb.Data("К началу", "to_start")
-	kb.Inline(
-		kb.Row(btnWG, btnVLESS),
-		kb.Row(btnClients),
-		kb.Row(btnToStart),
-	)
-
-	return kb
-}
-
-func getHelpWGDetailsKeyboard() *telebot.ReplyMarkup {
-	kb := &telebot.ReplyMarkup{}
-
-	btnClients := kb.Data("WG клиенты", "help|clients|wg")
-	btnBack := kb.Data("Назад", "help|menu")
-	btnToStart := kb.Data("К началу", "to_start")
-	kb.Inline(
-		kb.Row(btnClients),
-		kb.Row(btnBack, btnToStart),
-	)
-
-	return kb
-}
-
-func getHelpVLESSDetailsKeyboard() *telebot.ReplyMarkup {
-	kb := &telebot.ReplyMarkup{}
-
-	btnClients := kb.Data("VLESS клиенты", "help|clients|vless")
-	btnBack := kb.Data("Назад", "help|menu")
-	btnToStart := kb.Data("К началу", "to_start")
-	kb.Inline(
-		kb.Row(btnClients),
-		kb.Row(btnBack, btnToStart),
-	)
-
-	return kb
-}
-
-func getHelpClientsMenuKeyboard() *telebot.ReplyMarkup {
-	kb := &telebot.ReplyMarkup{}
-
-	btnWGClients := kb.Data("WG клиенты", "help|clients|wg")
-	btnVLESSClients := kb.Data("VLESS клиенты", "help|clients|vless")
-	btnBack := kb.Data("Назад", "help|menu")
-	btnToStart := kb.Data("К началу", "to_start")
-
-	kb.Inline(
-		kb.Row(btnWGClients),
-		kb.Row(btnVLESSClients),
-		kb.Row(btnBack, btnToStart),
-	)
-
-	return kb
-}
-
-func getHelpWGClientsKeyboard() *telebot.ReplyMarkup {
-	kb := &telebot.ReplyMarkup{}
-
-	btnAmneziaWGIOS := kb.URL("Amnezia iOS", "https://apps.apple.com/us/app/amneziavpn/id1600529900")
-	btnAmneziaWGAndroid := kb.URL("Amnezia Android", "https://play.google.com/store/apps/details?id=org.amnezia.awg")
-	btnAmneziaWGPC := kb.URL("Сайт Amnezia", "https://amnezia.org/ru/downloads")
-	btnWireGuardIOS := kb.URL("WireGuard iOS", "https://apps.apple.com/us/app/wireguard/id1441195209")
-	btnWireGuardAndroid := kb.URL("WireGuard Android", "https://play.google.com/store/apps/details?id=com.wireguard.android&hl=ru")
-	btnWireGuardSite := kb.URL("Сайт WireGuard", "https://www.wireguard.com/")
-	btnBack := kb.Data("Назад", "help|clients")
-	btnToStart := kb.Data("К началу", "to_start")
-
-	kb.Inline(
-		kb.Row(btnAmneziaWGIOS, btnAmneziaWGAndroid),
-		kb.Row(btnAmneziaWGPC),
-		kb.Row(btnWireGuardIOS, btnWireGuardAndroid),
-		kb.Row(btnWireGuardSite),
-		kb.Row(btnBack, btnToStart),
-	)
-
-	return kb
-}
-
-func getHelpVLESSClientsKeyboard() *telebot.ReplyMarkup {
-	kb := &telebot.ReplyMarkup{}
-
-	btnV2RayTunIOS := kb.URL("v2raytun iOS", "https://apps.apple.com/us/app/v2raytun/id6476628951")
-	btnV2RayTunAndroid := kb.URL("v2raytun Android", "https://play.google.com/store/apps/details?id=com.v2raytun.android")
-	btnV2RayTunSite := kb.URL("Сайт v2raytun", "https://v2raytun.com/#download")
-	btnHappAndroid := kb.URL("Happ Android", "https://play.google.com/store/apps/details?id=com.happproxy")
-	btnHappIOS := kb.URL("Happ iOS", "https://apps.apple.com/us/app/happ-proxy-utility/id6504287215")
-	btnHappSite := kb.URL("Сайт Happ", "https://www.happ.su/main/ru")
-	btnBack := kb.Data("Назад", "help|clients")
-	btnToStart := kb.Data("К началу", "to_start")
-
-	kb.Inline(
-		kb.Row(btnV2RayTunIOS, btnV2RayTunAndroid),
-		kb.Row(btnV2RayTunSite),
-		kb.Row(btnHappAndroid, btnHappIOS),
-		kb.Row(btnHappSite),
-		kb.Row(btnBack, btnToStart),
-	)
-
-	return kb
-}
-
-func getHelpWGMessage() string {
-	return strings.TrimSpace(helpWGText)
-}
-
-func getHelpVLESSMessage() string {
-	return strings.TrimSpace(helpVLESSText)
-}
-
-func sendHelpMenu(c telebot.Context) error {
-	return c.Send("Выберите раздел помощи:", getHelpMenuKeyboard())
-}
-
-func HandleHelpMenu(c telebot.Context) error {
-	return sendHelpMenu(c)
-}
-
-func HandleHelpWG(c telebot.Context) error {
-	return c.Send(getHelpWGMessage(), getHelpWGDetailsKeyboard())
-}
-
-func HandleHelpVLESS(c telebot.Context) error {
-	return c.Send(getHelpVLESSMessage(), getHelpVLESSDetailsKeyboard())
-}
-
-func HandleHelpClients(c telebot.Context) error {
-	return c.Send("Выберите тип клиента:", getHelpClientsMenuKeyboard())
-}
-
-func HandleHelpWGClients(c telebot.Context) error {
-	return c.Send("WG клиенты. Если не нашли свою платформу, откройте официальный сайт ниже.", getHelpWGClientsKeyboard())
-}
-
-func HandleHelpVLESSClients(c telebot.Context) error {
-	return c.Send("VLESS клиенты. Если не нашли свою платформу, откройте официальный сайт ниже.", getHelpVLESSClientsKeyboard())
-}
-
-func HandleHelpCommand(c telebot.Context) error {
-	return sendHelpMenu(c)
-}
-
-func HandleHelpButton(c telebot.Context) error {
-	return sendHelpMenu(c)
 }

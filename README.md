@@ -1,95 +1,14 @@
-# Oksana VPN Bot (Go)
+# Oksana VPN Telegram Bot
 
-Telegram bot for managing VPN access, rewritten from Python to Go for better performance, scalability, and maintainability.
+The bot responds to `/start` with a welcome message and links to the website, news channel, and chat.
 
-## 🚀 About
+## Configuration
 
-This project is a **Go rewrite** of the original Python bot:  
-- Old version: https://github.com/musiermoore/oksana-vpn-python-bot  
-- New version: https://github.com/musiermoore/oksana-vpn-bot  
-
-The rewrite focuses on:
-- ⚡ Better performance (Go concurrency)
-- 🧠 Cleaner architecture
-- 📦 Easier deployment
-- 🔒 Improved stability for production usage
-
----
-
-## ✨ Features
-
-- Telegram bot interface
-- VPN user management
-- Key / configuration generation (e.g. WireGuard)
-- Subscription / access control (if implemented)
-- Admin controls
-- Scalable architecture using Go routines
-- Logging and error handling
-
----
-
-## 🆚 Migration from Python
-
-| Aspect        | Python Bot | Go Bot |
-|--------------|-----------|--------|
-| Performance  | Moderate  | High ⚡ |
-| Concurrency  | Async (aiogram / asyncio) | Native goroutines |
-| Deployment   | Python env required | Single binary |
-| Maintainability | Medium | High |
-
-The Go version replaces the Python implementation while keeping core logic and behavior consistent.
-
----
-
-## 🛠 Tech Stack
-
-- Go (Golang)
-- Telegram Bot API
-- VPN backend (e.g. WireGuard / scripts / API)
-- Optional:
-  - Docker
-  - Database (if used)
-  - External APIs
-
----
-
-## 📦 Installation
-
-### 1. Clone repository
-
-```bash
-git clone https://github.com/musiermoore/oksana-vpn-bot.git
-cd oksana-vpn-bot
-```
-
-### 2. Configure environment
-
-Create a `.env` file:
+Create a `.env` file with the bot token. The Telegram proxy is optional.
 
 ```env
 BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_PROXY=socks5h://host.docker.internal:1080
-
-# API Url
-API_URL=http://localhost/api
-
-# API Basic Auth (optional)
-API_BASIC_AUTH_USER=
-API_BASIC_AUTH_PASSWORD=
 ```
 
-`TELEGRAM_PROXY` is optional. When set, only Telegram Bot API requests use the SOCKS5 proxy. All other outbound HTTP traffic keeps the normal direct route.
-
-### 3. Run locally
-
-```bash
-go mod tidy
-go run main.go
-```
-
-### 4. Build binary
-
-```bash
-go build -o bot
-./bot
-```
+Run locally with `go run .`, or build a binary with `go build -o bot .`.

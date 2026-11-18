@@ -7,13 +7,10 @@
 - `.env` file with required environment variables
 
 ### Environment Variables
-Create a `.env` file based on `.env.example`:
+Create a `.env` file:
 ```bash
 BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_PROXY=socks5h://host.docker.internal:1080
-API_URL=https://your-api-url.com
-API_BASIC_AUTH_USER=your_username
-API_BASIC_AUTH_PASSWORD=your_password
 ```
 
 `TELEGRAM_PROXY` is optional and affects only Telegram Bot API traffic. The production Compose file includes `extra_hosts: ["host.docker.internal:host-gateway"]` so the container can resolve `host.docker.internal` and reach the Xray SOCKS5 listener on the Docker host at port `1080`.

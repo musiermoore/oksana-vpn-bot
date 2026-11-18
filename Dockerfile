@@ -29,8 +29,5 @@ WORKDIR /root/
 # Copy the binary from builder
 COPY --from=builder /app/main .
 
-# Copy the images directory
-COPY --from=builder /app/internal/images ./internal/images
-
 # Run the application
 CMD ["./main"]
