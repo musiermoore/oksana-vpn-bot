@@ -19,36 +19,17 @@ var helpVLESSText string
 func getMainMenu() *telebot.ReplyMarkup {
 	menu := &telebot.ReplyMarkup{}
 
-	btnWgConfigs := menu.Data("WireGuard", "wireguard_menu_configs")
-	btnVless := menu.Data("VLESS", "vless_menu")
-	btnSubscription := menu.Data("Подписка", "menu_subscription")
-	btnHelp := menu.Data("Помощь", "menu_help")
+	btnSite := menu.URL("Сайт", "https://oksana1984.ru")
+	btnNews := menu.URL("Новости", "https://t.me/+DfexxpJzKiFkNzQ6")
+	btnChat := menu.URL("Чат", "https://t.me/+jG8T4yBk0tg4MWNi")
 
 	menu.Inline(
-		menu.Row(btnWgConfigs, btnVless),
-		menu.Row(btnSubscription, btnHelp),
+		menu.Row(btnSite),
+		menu.Row(btnNews),
+		menu.Row(btnChat),
 	)
 
 	return menu
-}
-
-func getGuestMenu() *telebot.ReplyMarkup {
-	menu := &telebot.ReplyMarkup{}
-
-	btnRegister := menu.Data("Регистрация", "menu_register")
-	btnHelp := menu.Data("Помощь", "menu_help")
-
-	menu.Inline(menu.Row(btnRegister, btnHelp))
-
-	return menu
-}
-
-func getTopUpReminder(status api.RegistrationStatus) string {
-	if !status.Registered || status.HasMoneyForNextSubscriptionMonth {
-		return ""
-	}
-
-	return "\n\nПополнение может понадобиться уже скоро. На следующий месяц баланса сейчас не хватает."
 }
 
 func getSubscriptionDetails(status api.RegistrationStatus) string {
@@ -66,68 +47,15 @@ func getSubscriptionDetails(status api.RegistrationStatus) string {
 	return details
 }
 
-func getStartMessage(status api.RegistrationStatus) string {
-	message := strings.TrimSpace(status.WelcomeText)
-	if message == "" {
-		message = "👋 Добро пожаловать в <b>OksanaVPN</b>!\n\nВыберите нужное действие в меню ниже и начните пользоваться VPN уже через пару минут 🚀"
-	}
-
-	return message + getTopUpReminder(status)
-}
-
-func ensureRegistered(c telebot.Context) (api.RegistrationStatus, error) {
-	client := api.NewClient(c)
-	status, err := client.GetRegistrationStatus()
-
-	if err == nil && status.Registered {
-		return status, nil
-	}
-
-	if err != nil && !api.IsMissingUserError(404, err.Error()) {
-		return api.RegistrationStatus{}, err
-	}
-
-	if err := client.RegisterUser(); err != nil {
-		return api.RegistrationStatus{}, err
-	}
-
-	status, err = client.GetRegistrationStatus()
-	if err == nil {
-		status.Registered = true
-		return status, nil
-	}
-
-	return api.RegistrationStatus{Registered: true}, nil
+func getStartMessage() string {
+	return "👋 Добро пожаловать в мини-приложение <b>OksanaVPN</b>!\n\nЕсли мини-приложение недоступно, воспользоваться OksanaVPN можно на <a href=\"https://oksana1984.ru\">сайте</a>."
 }
 
 func showStartMenu(c telebot.Context) error {
-	status, err := ensureRegistered(c)
-	if err != nil {
-		return c.Send("Не получилось начать работу. Попробуй чуть позже.")
-	}
-
-	return c.Send(getStartMessage(status), &telebot.SendOptions{
+	return c.Send(getStartMessage(), &telebot.SendOptions{
 		ParseMode:   telebot.ModeHTML,
 		ReplyMarkup: getMainMenu(),
 	})
-}
-
-func HandleRegisterCommand(c telebot.Context) error {
-	client := api.NewClient(c)
-	status, err := client.GetRegistrationStatus()
-	if err != nil {
-		return c.Send("Не получилось проверить статус регистрации. Попробуй чуть позже.")
-	}
-
-	if status.Registered {
-		return c.Send("Ты уже зарегистрирован. Можно пользоваться ботом.", getMainMenu())
-	}
-
-	if err := client.RegisterUser(); err != nil {
-		return c.Send("Не получилось завершить регистрацию. Попробуй чуть позже.")
-	}
-
-	return showStartMenu(c)
 }
 
 func getHelpMenuKeyboard() *telebot.ReplyMarkup {

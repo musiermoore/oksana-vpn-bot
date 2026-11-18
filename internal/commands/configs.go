@@ -24,9 +24,6 @@ func getConfigsKeyboard(c telebot.Context, configType string) (*telebot.ReplyMar
 			row := kb.Data(config.Name, "config|"+configType+"|"+strconv.Itoa(int(config.ID)))
 			inline = append(inline, kb.Row(row))
 		}
-	} else if response.Type == "debt" {
-		btnSubscription := kb.Data("Подписка", "menu_subscription")
-		inline = append(inline, kb.Row(btnSubscription))
 	}
 
 	btnToStart := kb.Data("К началу", "to_start")
