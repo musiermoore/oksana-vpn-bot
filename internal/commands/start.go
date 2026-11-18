@@ -48,7 +48,7 @@ func getSubscriptionDetails(status api.RegistrationStatus) string {
 }
 
 func getStartMessage() string {
-	return "👋 Добро пожаловать в <b>Oksana VPN</b>!\n\nЕсли мини-приложение недоступно, воспользоваться OksanaVPN можно на <a href=\"https://oksana1984.ru\">сайте</a>."
+	return "👋 Добро пожаловать в <b>Oksana VPN</b>!\n\nЕсли мини-приложение недоступно, настроить VPN можно на <a href=\"https://oksana1984.ru\">сайте</a>."
 }
 
 func showStartMenu(c telebot.Context) error {
